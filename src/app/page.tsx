@@ -416,7 +416,7 @@ export default function Home() {
               <span className="brand-mark"><Sparkles size={19} strokeWidth={2.5} /></span>
               <span>study<span className="brand-light">spark</span><span className="brand-dot">.</span></span>
             </a>
-            <span className="auth-demo-label"><span /> Student study space</span>
+            <a href="/schools" className="secondary-button">For schools & organizations <ArrowRight size={14} /></a>
           </header>
 
           <div className="auth-columns">
