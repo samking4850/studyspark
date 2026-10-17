@@ -426,7 +426,7 @@ export default function Home() {
               <span className="brand-mark"><Sparkles size={19} strokeWidth={2.5} /></span>
               <span>study<span className="brand-light">spark</span><span className="brand-dot">.</span></span>
             </a>
-            <button className="secondary-button" onClick={()=>setStudentAccess(false)}>For colleges</button>
+            <div className="college-actions"><button className="secondary-button" onClick={()=>setStudentAccess(false)}>For colleges</button><a href="/schools" className="secondary-button">Schools &amp; organizations <ArrowRight size={14}/></a></div>
           </header>
 
           <div className="auth-columns">
