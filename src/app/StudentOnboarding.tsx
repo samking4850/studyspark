@@ -12,6 +12,7 @@ export type StudentProfile = {
   dailyMinutes: number;
   biggestChallenge: string;
   studyHabits?: string;
+  readingComfort?: string;
   readingSupport?: string;
   writingSupport?: string;
   completedAt: string;
@@ -27,6 +28,7 @@ const defaults: Draft = {
   dailyMinutes: 30,
   biggestChallenge: "Knowing where to start",
   studyHabits: "Reread or highlight notes",
+  readingComfort: "I follow most course readings",
   readingSupport: "Standard explanations",
   writingSupport: "Open reflection prompts",
 };
@@ -38,6 +40,7 @@ const choices: { field: Exclude<keyof Draft,"dailyMinutes"|"motivation">; title:
   { field: "practicePreference", title: "What kind of practice sounds most useful?", subtitle: "We’ll keep this preference with your profile. Practice formats vary by course and available content.", options: ["Practice questions with hints", "Flashcards and quick recall", "Scenario-based challenges", "Games and trivia"] },
   { field: "biggestChallenge", title: "What's your biggest challenge when studying?", subtitle: "Knowing the obstacle helps us build a better study experience.", options: ["Knowing where to start", "Staying motivated", "Understanding difficult concepts", "Remembering what I've learned", "Finding enough time"] },
   {field:"studyHabits",title:"How do you usually study?",subtitle:"Tell us your current habit so we can help you add active practice.",options:["Reread or highlight notes","Test myself with questions","Study with friends","Cram before an exam","I do not have a consistent routine"]},
+  {field:"readingComfort",title:"How comfortable are you with course readings?",subtitle:"Your own reading-comfort estimate helps us choose support. This is not a measured reading grade or a literacy diagnosis.",options:["I need help unpacking course readings","I follow most course readings","I am comfortable with complex course readings"]},
   {field:"readingSupport",title:"What makes course explanations easier to follow?",subtitle:"Choose support that helps you. This survey does not measure reading level or diagnose a learning difference.",options:["Standard explanations","Plain language and short sections","Key terms defined before examples"]},
   {field:"writingSupport",title:"What helps you explain an idea in writing?",subtitle:"We can offer a starting point. Your reflections are not automatically graded for writing ability.",options:["Open reflection prompts","Sentence starters","A short outline before writing"]},
 ];
@@ -48,7 +51,7 @@ export default function StudentOnboarding({ name, initial, onSave, onExit, embed
     goal: initial.goal, motivation: initial.motivation, confidence: initial.confidence,
     explanationPreference: initial.explanationPreference, practicePreference: initial.practicePreference,
     dailyMinutes: initial.dailyMinutes, biggestChallenge: initial.biggestChallenge,
-    studyHabits:initial.studyHabits??defaults.studyHabits,readingSupport:initial.readingSupport??defaults.readingSupport,writingSupport:initial.writingSupport??defaults.writingSupport,
+    studyHabits:initial.studyHabits??defaults.studyHabits,readingComfort:initial.readingComfort??defaults.readingComfort,readingSupport:initial.readingSupport??defaults.readingSupport,writingSupport:initial.writingSupport??defaults.writingSupport,
   } : defaults);
   const total = choices.length+2;
   const current = choices[step];

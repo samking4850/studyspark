@@ -12,10 +12,10 @@ Start as an add-on to the existing course workflow. Canvas replacement is outsid
 
 | Requirement | Current implementation | Remaining dependency or boundary |
 |---|---|---|
-| One-click school access | Clearly labeled LMS/Canvas launch concept in the judge demo | Institution-approved identity/LTI integration. No school password is collected; a university email alone is not verified enrollment. |
+| One-click school access | Clearly labeled demo school-email signup; Canvas/SSO described as planned | Institution-approved identity/LTI integration. No school password is collected; a university email alone is not verified enrollment. |
 | Materials by upload/drag-and-drop | Working text-based PDF extraction in course details and the public demo | Slides, notes, syllabus, or permitted textbook excerpts must currently be PDFs. Native PowerPoint/Word, scans/OCR, and automatic course import are not supported. |
 | Goals, motivation, habits | Expanded onboarding captures all three; motivation appears in lessons | No validated inference about a student's motivation or behavior. |
-| Reading/writing support | Optional preferences for plain language, key ideas, sentence starters, and outlines; lesson support follows those choices | Not a literacy, disability, reading-level, or writing-ability assessment. |
+| Reading/writing support | Self-reported reading comfort plus preferences for plain language, key ideas, sentence starters, and outlines; lesson support follows those choices | Not a literacy, disability, reading-level, or writing-ability assessment. |
 | Instructor learning targets | Explicit prepared FIN101 objectives drive its diagnostic and lessons | Real instructor authoring/approval is separate work; the team's existing professor-portal branch is not merged by this change. |
 | Diagnostic knowledge check | Eight prepared questions, two per FIN101 objective; results save per local account | This small sample is a starting-point check, not a validated mastery or literacy assessment. |
 | Personalized plan | Weak topics first; session length and support depend on topic results and time budget | Transparent rules over the sample course, not AI-generated plans from arbitrary uploads. |
@@ -23,7 +23,7 @@ Start as an add-on to the existing course workflow. Canvas replacement is outsid
 | Supplemental learning | Weak topic results add a foundation bridge; strong results add application questions | Content is prepared and bounded to FIN101. |
 | Automatic plan updates | Passing lesson practice and reflection moves the topic into review and reprioritizes unfinished topics | No automatic generalization to other courses; no spaced-retention model yet. |
 | Academic integrity | Practice-only context, attempt before feedback, no homework-answer chat or graded-work generation endpoint | Cannot guarantee prevention of cheating. Institutional policies and instructor-defined assessment boundaries remain necessary. |
-| Study Night | Trivia, individual/team rooms, host-written questions, explanations, missed-question review, and a clearly simulated judge preview | Production shared rooms still require the approved Redis setup/provider terms. Word puzzles and survey/game-show formats are roadmap. |
+| Study Night | Trivia, individual/team rooms, host-written questions, explanations, missed-question review, and a clearly simulated judge preview | The walkthrough includes playable local Word Wheel and Category Quest games plus simulated class invitations. Production shared rooms still require the approved Redis setup/provider terms; actual event delivery and roster integration are not connected. |
 | Hosting | GitHub main deploys to Vercel | Already working; do not duplicate the repository or hosting project. |
 | Backend / school records | Current accounts and individual progress are browser-local | Choose and configure institutional identity, durable student records, roles, permissions, and appropriate data handling before a real pilot. Supabase is an option, not currently connected. |
 | AI generation | Prepared content demonstrates the intended learning loop | Model selection, grounded generation, quality evaluation, cost controls, and provider credentials are not connected. A quoted subscription amount does not establish API pricing or budget. |
@@ -74,9 +74,9 @@ Do not collect sensitive student records for discovery. Ask permission before re
 
 ## Judge demo sequence
 
-1. **Course launch:** explain the institutional entry point, instructor objectives, and materials. The Canvas-style launch is labeled as a concept; PDF extraction is real.
-2. **Know the learner:** change study time/preferences or try the onboarding survey.
-3. **Find the gaps:** answer the eight-question diagnostic and update the plan.
-4. **Learn and adapt:** open a prioritized topic, show foundation support or application practice, and complete a lesson to see the remaining plan change.
-5. **Study together:** use the labeled simulated group game and show explanations/missed-question review.
-6. **For colleges:** show the course-pilot licensing hypothesis, evaluation measures, and the distinction between working prototype and planned integrations.
+1. **Student signup:** create a clearly labeled demo student identity without a password or real account.
+2. **Personalize:** complete all 11 questions, including goals, explanation/practice preferences, reading comfort/support, writing support, motivation, and time.
+3. **Join a class:** enroll in sample FIN101 and see instructor learning objectives. PDF extraction remains available.
+4. **Start learning:** inspect the preference summary, open an actual lesson, and show how explanations, practice, and support change. The diagnostic remains available in the class.
+5. **Class study event:** create an event, preview classmate invitations, and play Word Wheel or Category Quest. Roster and invitations are simulated; games run locally.
+6. **Why StudySpark:** show sourced competitor comparisons, the proposed institutional learning loop, and explicit working-versus-future capabilities.

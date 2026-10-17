@@ -44,7 +44,7 @@ This is structured, rules-based sample content, not AI-generated instruction, li
 
 ## Judge demo and Study Night
 
-Select **Experience the demo** on the sign-in page. No account is needed. Five chapters follow Jamie from overwhelm through a personalized plan, a working finance lesson, a group-game preview, and the roadmap. The group preview explicitly uses simulated friends and runs entirely on one screen. The lesson's demo-only progress is stored under the `judge-demo` account key, separate from personal workspaces.
+Select **Experience the demo** on the public landing page. Six guided chapters cover demo student signup, all 11 personalization questions, FIN101 enrollment, a lesson that uses those preferences, class-event creation with invitation previews and two playable games, and a sourced competitor comparison. The walkthrough uses a separate per-run demo account namespace. See [STUDENT_DEMO_GUIDE.md](STUDENT_DEMO_GUIDE.md).
 
 `/study-night` is the public multiplayer entry point. It supports room codes and invite links, individual or alternating Purple/Gold teams, 30-second questions, host-controlled reveals, leaderboards, and personal missed-question review. Hosts can use an eight-question shuffled FIN101 sample deck or write 3–12 questions with four distinct choices, explanations, and optional source references. This does not generate quizzes from PDFs or use AI. Rooms support 12 players and expire four hours after creation; closing the page does not remove a player from the room. Hosts should keep their session open or return in the same tab.
 
@@ -56,9 +56,9 @@ Run game-domain regression tests with Node.js 24: `node --experimental-strip-typ
 
 ## College-focused demo and adaptive sample plan
 
-The public landing page now positions StudySpark as college-funded learning support. **Experience the demo** follows a simulated Canvas course launch, a learner profile, an eight-question FIN101 starting-point check, prioritized practice, Study Night, and institutional pilot scopes. No school credentials are requested. Canvas launch is an explicit concept preview, not a live LTI integration. The existing student prototype remains available through **Student prototype**.
+The public landing page positions StudySpark as college-funded learning support. The student walkthrough demonstrates the intended college-supported experience. Signup, enrollment, class rosters, and invitations are simulations; Canvas/SSO are future integrations. The existing student prototype remains available through **Student prototype**.
 
-Onboarding now captures study habits, goals/motivation, and optional reading/writing support preferences. Plain-language/key-idea bridges, sentence starters/outlines, brief/detailed explanations, progressive worked steps, hints, recall-before-choices, and scenario practice have concrete effects in sample lessons. Preferences are not validated reading/writing assessments.
+Onboarding captures study habits, goals/motivation, self-reported reading comfort, and reading/writing support preferences. Plain-language/key-idea bridges, sentence starters/outlines, brief/detailed explanations, progressive worked steps, hints, recall-before-choices, and scenario practice have concrete effects in sample lessons. Preferences are not validated reading/writing assessments.
 
 The diagnostic scores two prepared questions per sample objective. Transparent rules prioritize weaker topics, shorten stronger-topic sessions, add foundation support or application practice, and pack sessions within the daily time budget. Completing a lesson moves it to review. Individual data still saves locally. Uploading arbitrary materials does not generate AI lessons; the new public-demo PDF widget demonstrates extraction only.
 
