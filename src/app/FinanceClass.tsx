@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, CheckCircle2, Clock3, GraduationCap, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clock3, GraduationCap, Sparkles, Target } from "lucide-react";
 import type { StudentProfile } from "./StudentOnboarding";
 import FinanceLesson from "./FinanceLesson";
 
@@ -22,23 +22,27 @@ function addDays(date: Date, days: number) { const copy = new Date(date); copy.s
 export default function FinanceClass({ profile, accountId, onBack }: { profile: StudentProfile; accountId: string; onBack: () => void }) {
   const storageKey = `study-spark-finance-completed:${accountId}`;
   const [completed, setCompleted] = useState<string[]>([]);
+  const [started,setStarted]=useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [today, setToday] = useState<Date | null>(null);
   useEffect(() => {
     setToday(new Date());
-    try { const stored = JSON.parse(window.localStorage.getItem(storageKey) || "[]"); if (Array.isArray(stored)) setCompleted(stored.filter((x): x is string => typeof x === "string")); } catch { /* demo storage */ }
+    try { const stored = JSON.parse(window.localStorage.getItem(storageKey) || "[]"); if (Array.isArray(stored)) setCompleted([...new Set(stored.filter((x): x is string => typeof x === "string" && lessons.some(lesson=>lesson.id===x)))]); } catch { /* demo storage */ }
   }, [storageKey]);
+  useEffect(()=>{
+    try {setStarted(lessons.filter(lesson=>window.localStorage.getItem(`study-spark-lesson-v1:${accountId}:${lesson.id}`)!==null).map(lesson=>lesson.id));}catch{/* Storage can be unavailable. */}
+  },[accountId,active]);
   const current = lessons.find(x => x.id === active);
   const minutes = Math.max(10, Math.min(120, profile.dailyMinutes || 30));
   const plan = useMemo(() => lessons.map((lesson, i) => ({ ...lesson, day:i + 1, minutes:Math.min(minutes, 25), done:completed.includes(lesson.id) })), [completed, minutes]);
-  if (current) return <FinanceLesson key={current.id} lesson={current} profile={profile} minutes={Math.min(minutes,25)} alreadyMastered={completed.includes(current.id)} onBack={()=>setActive(null)} onMastered={()=>{const next=Array.from(new Set([...completed,current.id]));setCompleted(next);try{window.localStorage.setItem(storageKey,JSON.stringify(next));}catch{/* demo storage */}}}/>;
+  if (current) return <FinanceLesson key={current.id} lesson={current} profile={profile} minutes={Math.min(minutes,25)} accountId={accountId} alreadyMastered={completed.includes(current.id)} onBack={()=>setActive(null)} onMastered={()=>{const next=Array.from(new Set([...completed,current.id]));setCompleted(next);try{window.localStorage.setItem(storageKey,JSON.stringify(next));}catch{/* demo storage */}}}/>;
   return <section className="finance-class">
     <button className="back-link" onClick={onBack}><ArrowLeft size={16}/> My classes</button>
     <div className="finance-hero"><div><span className="finance-kicker"><GraduationCap size={15}/> ENROLLED · {FINANCE_CODE} · DEMO COURSE</span><h1>{FINANCE_NAME}</h1><p>Professor Morgan Lee · Current unit: Time Value of Money</p><span className="finance-tag"><CalendarDays size={15}/> Next quiz: {today ? formatDate(addDays(today, 5)) : "In 5 days"} · 4 learning objectives</span></div><div className="finance-progress"><strong>{completed.length} / 4</strong><span>lessons mastered</span><div className="finance-progress-track"><div style={{width:`${Math.min(100,completed.length/4*100)}%`}}/></div></div></div>
     <div className="finance-info-grid"><div className="finance-info-card"><Target size={20}/><strong>Your learning goal</strong><p>{profile.goal}</p></div><div className="finance-info-card"><Clock3 size={20}/><strong>Your study schedule</strong><p>{minutes} minutes available daily · {Math.min(minutes,25)} minute core lessons</p></div><div className="finance-info-card"><Sparkles size={20}/><strong>Your personalized approach</strong><p>{profile.explanationPreference} + {profile.practicePreference.toLowerCase()}</p></div></div>
     <div className="finance-section-heading"><div><span className="eyebrow">BUILT FOR YOUR NEXT QUIZ</span><h2>Your personalized lesson plan</h2><p>Professor-defined objectives, ordered from foundations to applications. Lessons adapt their presentation to your onboarding preferences.</p></div></div>
     {profile.motivation && <div className="finance-motivation"><Sparkles size={17}/><span><strong>Remember your why:</strong> {profile.motivation}</span></div>}
-    <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className={`finance-lesson ${active===lesson.id?"finance-lesson-active":""}`}><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : "UPCOMING"}</span><h3>{lesson.title}</h3><p>{lesson.short}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={()=>{setActive(lesson.id);}}>{lesson.done?"Review lesson":"Start lesson"} <ArrowRight size={15}/></button></div>
+    <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className={`finance-lesson ${active===lesson.id?"finance-lesson-active":""}`}><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : started.includes(lesson.id)?"IN PROGRESS":"UPCOMING"}</span><h3>{lesson.title}</h3><p>{lesson.short}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={()=>{setActive(lesson.id);window.scrollTo({top:0,behavior:"smooth"});}}>{lesson.done?"Review lesson":started.includes(lesson.id)?"Resume lesson":"Start lesson"} <ArrowRight size={15}/></button></div>
 </article>)}</div>
     <p className="finance-disclaimer">Demonstration: course, professor, quiz date, questions, and objectives are sample content. This version personalizes lesson presentation using onboarding preferences and tracks completion locally; diagnostic-based difficulty adjustment and real Canvas enrollment require further development.</p>
   </section>;
