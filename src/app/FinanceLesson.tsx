@@ -46,6 +46,7 @@ export default function FinanceLesson({lesson,profile,minutes,onBack,onMastered,
   const [loaded,setLoaded]=useState(false);
   const [saveFailed,setSaveFailed]=useState(false);
   const storageKey=`study-spark-lesson-v1:${accountId}:${lesson.id}`;
+  const practiceKey=`${minutes>=20||readiness===2?"extended":"core"}:${profile.practicePreference==="Scenario-based challenges"?"scenario":"standard"}`;
   const [answers,setAnswers]=useState<Record<number,number>>({});
   const [checked,setChecked]=useState(false);
   const [reflection,setReflection]=useState("");
@@ -56,13 +57,14 @@ export default function FinanceLesson({lesson,profile,minutes,onBack,onMastered,
       const saved=JSON.parse(window.localStorage.getItem(storageKey)||"null");
       if(saved && typeof saved==="object") {
         const validStage=(value:unknown)=>Number.isInteger(value)&&Number(value)>=0&&Number(value)<=3;
-        if(validStage(saved.stage))setStage(saved.stage);
-        if(validStage(saved.furthest))setFurthest(saved.furthest);
+        const samePractice=saved.practiceKey===practiceKey;
+        if(samePractice&&validStage(saved.stage))setStage(saved.stage);
+        if(samePractice&&validStage(saved.furthest))setFurthest(saved.furthest);
         if(typeof saved.reflection==="string")setReflection(saved.reflection.slice(0,5000));
         if(Number.isFinite(saved.elapsed)&&saved.elapsed>=0)setElapsed(saved.elapsed);
-        if(saved.answers&&typeof saved.answers==="object")setAnswers(Object.fromEntries(Object.entries(saved.answers).filter(([key,value])=>/^\d+$/.test(key)&&Number.isInteger(value)&&Number(value)>=0&&Number(value)<4)) as Record<number,number>);
-        setChecked(saved.checked===true);
-        setDone(saved.done===true&&alreadyMastered);
+        if(samePractice&&saved.answers&&typeof saved.answers==="object")setAnswers(Object.fromEntries(Object.entries(saved.answers).filter(([key,value])=>/^\d+$/.test(key)&&Number.isInteger(value)&&Number(value)>=0&&Number(value)<4)) as Record<number,number>);
+        setChecked(samePractice&&saved.checked===true);
+        setDone(samePractice&&saved.done===true&&alreadyMastered);
       }
     } catch { setSaveFailed(true); }
     setLoaded(true);
@@ -74,9 +76,9 @@ export default function FinanceLesson({lesson,profile,minutes,onBack,onMastered,
   },[loaded,done]);
   useEffect(()=>{
     if(!loaded)return;
-    try { window.localStorage.setItem(storageKey,JSON.stringify({stage,furthest,answers,checked,reflection,elapsed,done}));setSaveFailed(false); }
+    try { window.localStorage.setItem(storageKey,JSON.stringify({practiceKey,stage,furthest,answers,checked,reflection,elapsed,done}));setSaveFailed(false); }
     catch {setSaveFailed(true);}
-  },[loaded,storageKey,stage,furthest,answers,checked,reflection,elapsed,done]);
+  },[loaded,storageKey,practiceKey,stage,furthest,answers,checked,reflection,elapsed,done]);
   const exampleFirst=profile.explanationPreference==="Step-by-step examples";
   const realFirst=profile.explanationPreference==="Real-world applications";
   const brief=profile.explanationPreference==="Short and simple explanations";
