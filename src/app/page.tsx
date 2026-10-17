@@ -264,7 +264,7 @@ export default function Home() {
   }
 
   const accountDemoKey = activeAccount ? `study-spark-data:${activeAccount.id}` : "study-spark-data";
-  const { value: demoData, save: saveLocalData, hasStoredData, error: storageError } = useDemoStorage(accountDemoKey, initialDemoData);
+  const { value: demoData, save: saveLocalData, error: storageError } = useDemoStorage(accountDemoKey, initialDemoData);
   // Keep a local copy for speed and save every change to the student's account.
   const saveDemoData = useCallback((next: DemoData) => {
     const ok = saveLocalData(next);
@@ -286,7 +286,6 @@ export default function Home() {
   const [authName, setAuthName] = useState("Jamie Davis");
   const [authEmail, setAuthEmail] = useState(scratchAccountEmail);
   const [authPassword, setAuthPassword] = useState(scratchAccountPassword);
-  const saved = hasStoredData && !storageError;
   const studyReadyCourses = useMemo(() => getStudyReadyCourses(courses), [courses]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -568,7 +567,7 @@ export default function Home() {
           <button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav(!mobileNav)}><Menu size={20} /></button>
           <div className="breadcrumb">My workspace <ChevronRight size={14} /> <strong>{activePage}</strong></div>
           <div className="topbar-actions">
-            <div className="demo-indicator"><span />Demo mode</div>
+            <div className="demo-indicator"><span />Saved to your account</div>
             <button className="icon-button theme-button" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
             <button className="help-button"><CircleHelp size={17} /> <span>Help</span></button>
           </div>
@@ -582,7 +581,6 @@ export default function Home() {
             studentName={activeAccount.name}
             courses={courses}
               completed={completed}
-              saved={saved}
               storageError={storageError}
               onAdd={() => setJoinDialog(true)}
               onGo={setActivePage}
@@ -624,7 +622,7 @@ export default function Home() {
                 <label>Study time per day<select name="dailyStudyMinutes" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option><option value="120">2 hours</option></select></label>
               </div>
               <label>Target grade <span className="optional-label">Optional</span><select name="targetGrade" defaultValue=""><option value="">Not set</option><option>A range (90%+)</option><option>B range (80–89%)</option><option>C range (70–79%)</option><option>Pass the course</option></select></label>
-              <div className="demo-note"><Lightbulb size={17} /><span>Demo mode saves course details on this device only. You can add a PDF and review its extracted topics after creating the course.</span></div>
+              <div className="demo-note"><Lightbulb size={17} /><span>Course details are saved to your account. You can add a PDF and review its extracted topics after creating the course.</span></div>
               <div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setCourseDialog(false)}>Cancel</button><button type="submit" className="primary-button">Create course <ArrowRight size={16} /></button></div>
             </form>
           </section>
@@ -635,7 +633,7 @@ export default function Home() {
   );
 }
 
-function Overview({ studentName, courses, completed, saved, storageError, onAdd, onGo }: { studentName: string; courses: Course[]; completed: string[]; saved: boolean; storageError: string; onAdd: () => void; onGo: (page: Page) => void }) {
+function Overview({ studentName, courses, completed, storageError, onAdd, onGo }: { studentName: string; courses: Course[]; completed: string[]; storageError: string; onAdd: () => void; onGo: (page: Page) => void }) {
   const plan = buildStudyPlan(courses, completed);
   const readyCourses = getStudyReadyCourses(courses);
   const documentCount = courses.reduce((sum, course) => sum + (course.documents?.length ?? 0), 0);
@@ -672,7 +670,7 @@ function Overview({ studentName, courses, completed, saved, storageError, onAdd,
         {courses.length ? <div className="overview-course-list">{courses.map((course) => <button className="overview-course-item" key={course.id} onClick={() => onGo("My courses")}><span className={`course-dot ${course.color}`} /><span><strong>{course.name}</strong><small>{course.examDate ? `Exam ${new Date(`${course.examDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : "Exam date missing"} · {course.documents?.length ?? 0} files</small></span><ChevronRight size={15} /></button>)}</div> : <div className="first-course-empty compact"><p>Add a class to see its exam schedule and course files here.</p><button className="secondary-button" onClick={onAdd}><Plus size={14} /> Add class</button></div>}
       </section>
     </div>
-    <div className="data-footnote"><span><span className="demo-dot" /> DEMO MODE</span>{storageError || (saved ? "Your class data and extracted PDF text are saved in this browser." : "Class data and extracted PDF text are stored locally in this browser only.")}<button onClick={() => onGo("My progress")}>View actual progress <ArrowRight size={12} /></button></div>
+    <div className="data-footnote"><span><span className="demo-dot" /> SYNCED</span>{storageError || "Your classes, files and progress are saved to your account, so they follow you to any device."}<button onClick={() => onGo("My progress")}>View actual progress <ArrowRight size={12} /></button></div>
   </>;
 }
 
@@ -793,7 +791,7 @@ function CourseDetailPage({
   }
 
   if (!course) {
-    return <section className="panel missing-course"><h1>Course not found</h1><p>It may have been removed from this browser.</p><button className="secondary-button" onClick={onBack}><ChevronLeft size={15} /> Back to courses</button></section>;
+    return <section className="panel missing-course"><h1>Course not found</h1><p>It may have been removed from your account.</p><button className="secondary-button" onClick={onBack}><ChevronLeft size={15} /> Back to courses</button></section>;
   }
 
   const documents = course.documents ?? [];
@@ -805,12 +803,12 @@ function CourseDetailPage({
     <div className="course-setup-summary"><div><CalendarDays size={16} /><span><small>EXAM DATE</small><strong>{course.examDate ? new Date(`${course.examDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set"}</strong></span></div><div><Clock3 size={16} /><span><small>STUDY TIME</small><strong>{course.dailyStudyMinutes ?? 30} min per day</strong></span></div><div><Target size={16} /><span><small>TARGET GRADE</small><strong>{course.targetGrade || "Not set"}</strong></span></div></div>
     {storageError && <p className="storage-warning" role="alert">{storageError}</p>}
     <div className="course-workspace-grid">
-      <section className="panel materials-panel"><div className="panel-heading"><div><span className="eyebrow">YOUR COURSE MATERIALS</span><h2>Study documents</h2></div><span className="document-count">{documents.length}</span></div><p className="section-description">Upload text-based PDFs you have permission to use. We extract text to this browser demo; the original file is not retained.</p>
-        <label className={`upload-dropzone ${uploading ? "uploading" : ""} ${draggingFile ? "dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDraggingFile(true); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDraggingFile(false); }} onDrop={handleDrop}><input type="file" accept="application/pdf,.pdf" onChange={handleUpload} disabled={uploading} /><span className="upload-icon">{uploading ? <span className="loading-spinner" /> : <Upload size={18} />}</span><strong>{uploading ? "Reading your PDF…" : draggingFile ? "Drop PDF to add course content" : "Drop a PDF here or choose a file"}</strong><small>{uploading ? "Extracting selectable text and finding heading suggestions" : "PDF only · up to 5 MB · max 100 pages. The PDF is processed and its extracted text is saved in this browser."}</small></label>
+      <section className="panel materials-panel"><div className="panel-heading"><div><span className="eyebrow">YOUR COURSE MATERIALS</span><h2>Study documents</h2></div><span className="document-count">{documents.length}</span></div><p className="section-description">Upload text-based PDFs you have permission to use. We extract the text and save it to your account; the original file is not retained.</p>
+        <label className={`upload-dropzone ${uploading ? "uploading" : ""} ${draggingFile ? "dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDraggingFile(true); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDraggingFile(false); }} onDrop={handleDrop}><input type="file" accept="application/pdf,.pdf" onChange={handleUpload} disabled={uploading} /><span className="upload-icon">{uploading ? <span className="loading-spinner" /> : <Upload size={18} />}</span><strong>{uploading ? "Reading your PDF…" : draggingFile ? "Drop PDF to add course content" : "Drop a PDF here or choose a file"}</strong><small>{uploading ? "Extracting selectable text and finding heading suggestions" : "PDF only · up to 5 MB · max 100 pages. The PDF is processed and its extracted text is saved to your account."}</small></label>
         {uploadError && <p className="inline-error" role="alert">{uploadError}</p>}
         <div className="document-list">{documents.map((document) => <article className="document-card" key={document.id}><span className="document-file-icon"><FileText size={17} /></span><div className="document-info"><strong>{document.filename}</strong><small>{document.pageCount} pages · text extracted</small></div><details className="document-text"><summary>View text</summary><pre>{document.extractedText}{document.textTruncated ? "\n\n[Text excerpt truncated at 100,000 characters in this demo.]" : ""}</pre></details><button className="icon-button tiny remove-document" aria-label={`Remove ${document.filename}`} onClick={() => { const nextDocuments = documents.filter((item) => item.id !== document.id); const nextTopics = courseTopics.filter((topic) => topic.sourceDocumentId !== document.id); onUpdate(course.id, (item) => ({ ...item, documents: nextDocuments, courseTopics: nextTopics, topics: nextTopics.length })); }}><Trash2 size={14} /></button></article>)}</div>
         {!documents.length && !uploadError && <div className="empty-documents"><FileText size={16} /><span>No documents yet. You can still add topics manually.</span></div>}
-        <div className="document-disclaimer"><Lightbulb size={14} /><span>The original PDF is processed for text extraction, then discarded; extracted text and topic references are saved in this browser. Scanned/image-only PDFs need OCR, which is not included.</span></div>
+        <div className="document-disclaimer"><Lightbulb size={14} /><span>The original PDF is processed for text extraction, then discarded; extracted text and topic references are saved to your account. Scanned/image-only PDFs need OCR, which is not included.</span></div>
       </section>
 
       <section className="panel topics-panel"><div className="panel-heading"><div><span className="eyebrow">REVIEW &amp; EDIT</span><h2>Course topics</h2></div><span className="document-count">{courseTopics.length}</span></div><p className="section-description">{documents.length ? "Suggestions come from headings and repeated phrases in your document. Check them against your materials." : "Add topics yourself, or upload a PDF to get heading suggestions."}</p>
