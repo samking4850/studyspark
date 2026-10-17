@@ -1,6 +1,5 @@
-import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
 import { PDFParse } from "pdf-parse";
+import { getData } from "pdf-parse/worker";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -8,8 +7,7 @@ export const runtime = "nodejs";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PAGES = 100;
 const MAX_EXTRACTED_CHARACTERS = 100_000;
-const require = createRequire(`${process.cwd()}/package.json`);
-PDFParse.setWorker(pathToFileURL(require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")).toString());
+PDFParse.setWorker(getData());
 const STOP_WORDS = new Set([
   "about", "after", "again", "also", "among", "been", "before", "being", "between",
   "both", "could", "does", "each", "from", "have", "into", "more", "most", "other",
