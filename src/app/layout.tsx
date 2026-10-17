@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Study Spark — Your study sidekick",
+  title: "StudySpark — A clear next step for every student",
   description:
-    "A calmer way to prepare for exams. Plan your study sessions and learn one concept at a time.",
+    "College-funded learning support: instructor-aligned practice, purposeful study plans, and collaborative review.",
 };
 
 export default function RootLayout({

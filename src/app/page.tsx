@@ -1,5 +1,6 @@
 "use client";
 
+import CollegeLanding from "./CollegeLanding";
 import JudgeDemo from "./JudgeDemo";
 import StudyNight from "./StudyNight";
 import StudentOnboarding, { type StudentProfile } from "./StudentOnboarding";
@@ -288,6 +289,7 @@ function buildStudyPlan(courses: Course[], completed: string[]) {
 export default function Home() {
   const { accounts, persist: persistAccounts, hydrate: hydrateAccounts } = useStoredAccounts();
   const [activeAccountId, setActiveAccountIdState] = useState<string | null>(null);
+  const [studentAccess,setStudentAccess]=useState(false);
   const [judgeDemo,setJudgeDemo]=useState(false);
   const [mounted, setMounted] = useState(false);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
@@ -413,6 +415,8 @@ export default function Home() {
 
   if(judgeDemo)return <JudgeDemo onExit={()=>{setJudgeDemo(false);window.scrollTo({top:0});}}/>;
 
+  if(!activeAccount&&!studentAccess)return <CollegeLanding onDemo={()=>{setJudgeDemo(true);window.scrollTo({top:0});}} onStudentAccess={()=>{setStudentAccess(true);window.scrollTo({top:0});}}/>;
+
   if (!activeAccount) {
     return (
       <main className="auth-shell">
@@ -422,7 +426,7 @@ export default function Home() {
               <span className="brand-mark"><Sparkles size={19} strokeWidth={2.5} /></span>
               <span>study<span className="brand-light">spark</span><span className="brand-dot">.</span></span>
             </a>
-            <span className="auth-demo-label"><span /> Student study space</span>
+            <button className="secondary-button" onClick={()=>setStudentAccess(false)}>For colleges</button>
           </header>
 
           <div className="auth-columns">
@@ -489,7 +493,7 @@ export default function Home() {
   }
 
   if (!studentProfile || editingProfile) {
-    return <StudentOnboarding key={activeAccount.id} name={activeAccount.name} initial={studentProfile} onSave={saveStudentProfile} />;
+    return <StudentOnboarding key={activeAccount.id} name={activeAccount.name} initial={studentProfile} onSave={saveStudentProfile} onExit={signOut} />;
   }
 
   function joinClass(event: FormEvent<HTMLFormElement>) {

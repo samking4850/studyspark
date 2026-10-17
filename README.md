@@ -53,3 +53,13 @@ Live rooms require an Upstash Redis REST database connected through Vercel. Set 
 Room sessions use per-player random bearer tokens in browser session storage. The API hides answer keys until reveal, validates host actions and question indices, rejects duplicate/late answers, and uses atomic Redis compare-and-set updates so simultaneous submissions are preserved. Creation/join attempts are limited per IP. Rooms store nicknames and quiz content, not school account credentials or uploaded PDFs. This is an early prototype, not institutional authentication.
 
 Run game-domain regression tests with Node.js 24: `node --experimental-strip-types --test tests/study-night.test.mjs`.
+
+## College-focused demo and adaptive sample plan
+
+The public landing page now positions StudySpark as college-funded learning support. **Experience the demo** follows a simulated Canvas course launch, a learner profile, an eight-question FIN101 starting-point check, prioritized practice, Study Night, and institutional pilot scopes. No school credentials are requested. Canvas launch is an explicit concept preview, not a live LTI integration. The existing student prototype remains available through **Student prototype**.
+
+Onboarding now captures study habits, goals/motivation, and optional reading/writing support preferences. Plain-language/key-idea bridges, sentence starters/outlines, brief/detailed explanations, progressive worked steps, hints, recall-before-choices, and scenario practice have concrete effects in sample lessons. Preferences are not validated reading/writing assessments.
+
+The diagnostic scores two prepared questions per sample objective. Transparent rules prioritize weaker topics, shorten stronger-topic sessions, add foundation support or application practice, and pack sessions within the daily time budget. Completing a lesson moves it to review. Individual data still saves locally. Uploading arbitrary materials does not generate AI lessons; the new public-demo PDF widget demonstrates extraction only.
+
+See [PRODUCT_ALIGNMENT.md](./PRODUCT_ALIGNMENT.md) for the complete requirements audit, competitive research, proposed institutional pilot approach, and customer-discovery questions. Run both regression suites with Node.js 24: `node --experimental-strip-types --test tests/*.test.mjs`.
