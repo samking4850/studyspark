@@ -80,3 +80,9 @@ Do not collect sensitive student records for discovery. Ask permission before re
 4. **Start learning:** inspect the preference summary, open an actual lesson, and show how explanations, practice, and support change. The diagnostic remains available in the class.
 5. **Class study event:** create an event, preview classmate invitations, and play Word Wheel or Category Quest. Roster and invitations are simulated; games run locally.
 6. **Why StudySpark:** show sourced competitor comparisons, the proposed institutional learning loop, and explicit working-versus-future capabilities.
+
+## Additional implemented prototypes
+
+Turner's schools landing page is available at `/schools`. The instructor publishing and student review loop is integrated at `/instructor-demo` and `/learning-demo`: published lesson versions feed the student lesson, wrong answers generate prepared follow-up practice, and missed questions populate an individual review queue. These records remain local to the browser; teacher roles are not authenticated.
+
+The FIN101 class common room at `/community` supports course questions, threaded replies, study get-togethers, attendance, and invitation links. A browser-only preview is available without a backend. Shared spaces require the Redis integration and provider setup; they use nickname membership rather than verified enrollment, and expire after 30 days. This adds a place to coordinate studying alongside the games without claiming Canvas, university identity, email delivery, or production moderation.

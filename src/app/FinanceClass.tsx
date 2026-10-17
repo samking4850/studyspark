@@ -11,6 +11,7 @@ export const FINANCE_CODE = "FIN101";
 export const FINANCE_NAME = "Introduction to Finance";
 
 import ReviewQueue from "./ReviewQueue";
+import ClassCommunity from "./ClassCommunity";
 import { usePublication } from "./useLearningLoop";
 import { sampleLessons } from "../lib/course-content";
 
@@ -28,6 +29,7 @@ export default function FinanceClass({ profile, accountId, onBack, startWithDiag
   const [completed, setCompleted] = useState<string[]>([]);
   const [started,setStarted]=useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
+  const [showCommunity,setShowCommunity]=useState(false);
   const [today, setToday] = useState<Date | null>(null);
   useEffect(() => {
     setToday(new Date());
@@ -44,9 +46,11 @@ export default function FinanceClass({ profile, accountId, onBack, startWithDiag
   if(showDiagnostic)return <DiagnosticQuiz onCancel={()=>setShowDiagnostic(false)} onComplete={result=>{setDiagnostic(result);setShowDiagnostic(false);try{window.localStorage.setItem(`study-spark-diagnostic-v1:${accountId}`,JSON.stringify(result));setPlanNotice("Plan updated: topics needing the most support come first. This starting-point check is not a mastery grade.");}catch{setPlanNotice("Plan updated for this session, but browser storage is unavailable.");}}}/>;
   const currentPlan=plan.find(item=>item.id===active);
   if (current) return <FinanceLesson contentVersion={publication?.lesson.id===current.id?publication.version:0} key={`${progressId(current.id)}:${currentPlan?.readiness??"none"}:${currentPlan?.minutes??minutes}:${profile.practicePreference}`} lesson={current} profile={profile} minutes={currentPlan?.minutes??Math.min(minutes,25)} readiness={currentPlan?.readiness} accountId={accountId} alreadyMastered={completed.includes(current.id)} onBack={()=>setActive(null)} onMastered={()=>{const next=Array.from(new Set([...completed,current.id]));setCompleted(next);setPlanNotice("Lesson completed. Your plan has moved this topic to review and prioritized the remaining topics.");try{const saved=JSON.parse(window.localStorage.getItem(storageKey)||"[]");window.localStorage.setItem(storageKey,JSON.stringify([...new Set([...(Array.isArray(saved)?saved.filter(x=>typeof x==="string"):[]),progressId(current.id)])]));}catch{/* demo storage */}}}/>;
+  if(showCommunity)return <section className="finance-class"><button className="back-link" onClick={()=>setShowCommunity(false)}><ArrowLeft size={16}/> Back to lesson plan</button><ClassCommunity accountId={accountId}/></section>;
   return <section className="finance-class">
     <button className="back-link" onClick={onBack}><ArrowLeft size={16}/> My classes</button>
     <div className="finance-hero"><div><span className="finance-kicker"><GraduationCap size={15}/> ENROLLED · {FINANCE_CODE} · DEMO COURSE</span><h1>{FINANCE_NAME}</h1><p>Professor Morgan Lee · Current unit: Time Value of Money</p><span className="finance-tag"><CalendarDays size={15}/> Sample quiz: {today ? formatDate(addDays(today, 5)) : "In 5 days"} · 4 learning objectives</span></div><div className="finance-progress"><strong>{completed.length} / 4</strong><span>lessons mastered</span><div className="finance-progress-track"><div style={{width:`${Math.min(100,completed.length/4*100)}%`}}/></div></div></div>
+    <div className="community-class-banner"><div><h2>Your class common room</h2><p>Ask about course concepts and workload, or plan a study get-together.</p></div><button className="secondary-button" onClick={()=>setShowCommunity(true)}>Open class common room</button></div>
     {publication&&<div className="night-notice"><strong>Instructor-published lesson · version {publication.version}</strong><p>{publication.lesson.title} uses the reviewed content from the instructor demo. Other lessons are prepared samples.</p></div>}
     <ReviewQueue accountId={accountId}/>
     <div className="finance-info-grid"><div className="finance-info-card"><Target size={20}/><strong>Your learning goal</strong><p>{profile.goal}</p></div><div className="finance-info-card"><Clock3 size={20}/><strong>Your study schedule</strong><p>{minutes} minutes available daily · {Math.min(minutes,25)} minute core lessons</p></div><div className="finance-info-card"><Sparkles size={20}/><strong>Your personalized approach</strong><p>{profile.explanationPreference} + {profile.practicePreference.toLowerCase()}</p></div></div>

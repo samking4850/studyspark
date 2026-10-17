@@ -75,3 +75,11 @@ Checked wrong answers offer worked feedback and fresh prepared follow-up questio
 Publishing, drafts, lesson progress, and individual review queues use browser localStorage. Storage events synchronize tabs on the same origin. There are no protected teacher roles or cross-device course records; this is not ready for real student information. The existing professor-portal branch is separate and is not merged here.
 
 Tests: run `node --experimental-strip-types --test tests/*.test.mjs` with Node.js 24, `npm run lint`, and `npx tsc --noEmit`.
+
+## Class common room
+
+Open **Class common room** from the landing page, `/community`, or the FIN101 lesson plan. Students can post course questions, reply, arrange study get-togethers with a time and place, and mark attendance. Authors and the space creator can remove posts.
+
+The explicitly labeled browser preview saves only on this browser and does not send invitations or messages to classmates. Shared spaces use the same server-only Redis variables as Study Night. When connected, create a space, copy its invitation link, and have classmates join with a unique nickname. Shared posts refresh every four seconds and expire with the space after 30 days. Membership tokens authorize reading and posting; other members never receive those tokens. Updates use atomic compare-and-set, with request limits and bounded message sizes.
+
+This is an invitation-based FIN101 prototype, not a verified university roster or protected institutional forum. Do not enter real student records. School authentication, institutional moderation, notifications, and Canvas integration remain future work. No email invitations are sent.
