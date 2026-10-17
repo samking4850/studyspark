@@ -151,7 +151,7 @@ export default function ProfessorPortal() {
 
   function signOut() {
     window.sessionStorage.removeItem(professorSessionKey);
-    setProfessorId(null);
+    window.location.assign("/");
   }
 
   return (

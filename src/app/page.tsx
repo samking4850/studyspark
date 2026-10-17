@@ -3,6 +3,7 @@
 import StudentOnboarding, { type StudentProfile } from "./StudentOnboarding";
 import FinanceClass, { FINANCE_CODE, FINANCE_NAME } from "./FinanceClass";
 import ClassUpdates from "./ClassUpdates";
+import ProfessorSignInForm from "./ProfessorSignInForm";
 
 import {
   ArrowRight,
@@ -331,6 +332,7 @@ export default function Home() {
   const [mobileNav, setMobileNav] = useState(false);
   const [dark, setDark] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authRole, setAuthRole] = useState<"student" | "professor">("student");
   const [authError, setAuthError] = useState("");
   const [authName, setAuthName] = useState("Jamie Davis");
   const [authEmail, setAuthEmail] = useState(scratchAccountEmail);
@@ -425,7 +427,7 @@ export default function Home() {
               <span className="brand-mark"><Sparkles size={19} strokeWidth={2.5} /></span>
               <span>study<span className="brand-light">spark</span><span className="brand-dot">.</span></span>
             </a>
-            <span className="auth-demo-label"><span /> Student study space</span>
+            <span className="auth-demo-label"><span /> Students &amp; professors</span>
           </header>
 
           <div className="auth-columns">
@@ -448,6 +450,11 @@ export default function Home() {
             </section>
 
             <section className="auth-card" aria-labelledby="auth-heading">
+              <div className="role-switch" role="group" aria-label="Sign in as">
+                <button type="button" aria-pressed={authRole === "student"} className={authRole === "student" ? "selected" : ""} onClick={() => setAuthRole("student")}><GraduationCap size={15} /> I&apos;m a student</button>
+                <button type="button" aria-pressed={authRole === "professor"} className={authRole === "professor" ? "selected" : ""} onClick={() => setAuthRole("professor")}><Library size={15} /> I&apos;m a professor</button>
+              </div>
+              {authRole === "professor" ? <ProfessorSignInForm /> : <>
               <div className="auth-card-heading">
                 <span className="eyebrow">{authMode === "signin" ? "WELCOME BACK" : "GET STARTED"}</span>
                 <h2 id="auth-heading">{authMode === "signin" ? "Sign in to study" : "Create your account"}</h2>
@@ -482,6 +489,7 @@ export default function Home() {
                 <small>{scratchAccountEmail} · {scratchAccountPassword}</small>
               </div>
               <p className="auth-demo-note">Demo mode: accounts and class data are saved in this browser only. Study guides unlock after you add a class, an exam date, and an uploaded PDF. Live AI-generated guides and quizzes are not connected.</p>
+              </>}
             </section>
           </div>
           <footer className="auth-footer">Study Spark · Build a steady study habit, one session at a time.</footer>

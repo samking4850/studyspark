@@ -47,3 +47,7 @@
 .dark-mode .cls-message p, .dark-mode .cls-item p { color: #c9c4d6; }
 .dark-mode .cls-item, .dark-mode .cls-question { border-color: #3a3648; }
 @media (max-width: 800px) { .cls-row { grid-template-columns: 1fr; } }
+/* Student / professor choice on the landing sign-in card */
+.role-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 18px; padding: 4px; border-radius: 10px; background: #f3f1f8; }
+.role-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; border: 0; border-radius: 7px; background: transparent; color: #6b6779; font-size: 12px; font-weight: 600; cursor: pointer; }
+.role-switch button.selected { background: #fff; color: #5940bc; box-shadow: 0 1px 4px rgb(39 35 59 / 12%); }

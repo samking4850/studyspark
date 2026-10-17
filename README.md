@@ -44,7 +44,7 @@ This is structured, rules-based sample content, not AI-generated instruction, li
 
 ## v1.2: connected student and professor views (branch `main-v1.2`)
 
-Open `/professor` (demo login: `professor@scratch.test` / `teach123`) alongside the student app. Both read the same browser storage, so actions show up on the other side right away, even across tabs.
+Sign in from the home page: choose **I'm a student** or **I'm a professor** on the sign-in card (demo professor: `professor@scratch.test` / `teach123`). Professors land in `/professor`, which can also be opened directly. Both read the same browser storage, so actions show up on the other side right away, even across tabs.
 
 - **Students:** a 2-minute check-in reorders the FIN101 lesson plan (missed topics first, known topics marked as quick reviews). Lessons save study time, every practice answer, hints used and the written reflection. The class page lists professor assignments (lessons complete on mastery; readings can be marked done), shows messages from the professor, and tracks a weekly study goal and streak. The Overview shows a class update banner once a student has joined.
 - **Professors:** see real study time, last activity, check-in results, practice accuracy, hints and reflections per student; real per-question miss rates in the question bank; send messages students see in the app and get read receipts.
