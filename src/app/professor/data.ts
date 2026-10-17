@@ -1,22 +1,19 @@
-import { daysSince, readActivity, storageChangeEvent, readDiagnostic, weeklyMinutes, type Attempt, type Diagnostic, type Reflection } from "../classroom";
+import type { ClassInfo, ProfessorClassData } from "../cloud";
+import { daysSince, latest, weeklyMinutes } from "../classroom";
 
-// Data for the professor portal. Student records are read from the same
-// browser storage keys the student app writes; nothing here writes to them.
+// View model for the professor portal, built from the shared database.
 
 export type Objective = { id: string; title: string; objective: string };
 
-// studentLesson: the student app has a lesson for it, so mastery is recorded.
-export type ObjectiveRecord = Objective & { studentLesson: boolean; source?: string };
+// studentLesson: the student app has a lesson for it, so mastery is recorded. id is the objective key.
+export type ObjectiveRecord = Objective & { studentLesson: boolean; source?: string; dbId?: string };
 
 export type BankQuestion = { question: string; options: string[]; correct: number; why: string; sampleMissRate: number };
-
-export type ProfessorAccount = { id: string; name: string; email: string; password: string };
 
 export type AssignmentType = "Lesson" | "Reading" | "Practice set" | "Reflection";
 
 export type Assignment = {
   id: string;
-  classCode: string;
   title: string;
   type: AssignmentType;
   objectiveId?: string;
@@ -27,10 +24,9 @@ export type Assignment = {
   createdAt: string;
 };
 
-export type ClassMessage = { id: string; studentKey: string; from: string; text: string; sentAt: string; readAt?: string };
+export type ClassMessage = { id: string; studentKey: string; text: string; sentAt: string; readAt?: string };
 
 export type ProfessorData = {
-  professors: ProfessorAccount[];
   objectives: ObjectiveRecord[];
   messages: ClassMessage[];
   assignments: Assignment[];
@@ -49,8 +45,11 @@ export type LearningProfile = {
   biggestChallenge: string;
 };
 
-export type OtherCourse = { name: string; code: string; topics: number; completed: number };
+export type Attempt = { lessonId: string; question: number; chosen: number; correct: boolean; hinted: boolean; at: string };
+export type Reflection = { lessonId: string; text: string; at: string };
+export type Diagnostic = { results: Record<string, boolean>; takenAt: string };
 
+// key is the student's account id for real students, "sample:…" for examples.
 export type Student = {
   key: string;
   name: string;
@@ -61,7 +60,6 @@ export type Student = {
   mastered: string[];
   weeklyMinutes: number[] | null;
   profile: LearningProfile | null;
-  otherCourses: OtherCourse[];
   attempts: Attempt[];
   reflections: Reflection[];
   diagnostic: Diagnostic | null;
@@ -69,11 +67,7 @@ export type Student = {
 
 export type StudentStatus = "Mastered" | "On track" | "Needs attention" | "Not started";
 
-export const CLASS_CODE = "FIN101";
-export const CLASS_NAME = "Introduction to Finance";
-export const CLASS_UNIT = "Time Value of Money";
-
-// Same ids as the student lessons in FinanceClass.tsx so mastery lines up.
+// Built-in lessons for the finance template. Same keys as the student lessons in FinanceClass.tsx.
 export const OBJECTIVES: Objective[] = [
   { id: "fin-interest", title: "Simple vs. compound interest", objective: "Explain how interest accumulates over time" },
   { id: "fin-fv", title: "Future value", objective: "Calculate the future value of a lump sum" },
@@ -113,154 +107,69 @@ export const QUESTION_BANK: Record<string, BankQuestion[]> = {
 
 export const ASSIGNMENT_TYPES: AssignmentType[] = ["Lesson", "Reading", "Practice set", "Reflection"];
 
+// Demo accounts shown on the sign-in screens. They exist once someone creates them with these details.
 export const DEMO_PROFESSOR = { email: "professor@scratch.test", password: "teach123" };
+export const DEMO_STUDENT = { email: "student@scratch.test", password: "scratch123" };
 
-const storageKey = "study-spark-professor-data";
-export const professorSessionKey = "study-spark-professor-active";
-
-function isoDay(offsetDays: number) {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
-}
-
-function defaultData(): ProfessorData {
-  const now = new Date().toISOString();
-  const lesson = (id: string, objectiveId: string, title: string, due: number, minutes: number): Assignment => ({
-    id, classCode: CLASS_CODE, title, type: "Lesson", objectiveId, dueDate: isoDay(due), estMinutes: minutes,
-    instructions: "Complete the lesson in Study Spark. Mastery requires 3 of 4 practice questions correct and a written reflection.",
-    assignedTo: "all", createdAt: now,
-  });
-  return {
-    professors: [{ id: "professor-demo", name: "Morgan Lee", email: DEMO_PROFESSOR.email, password: DEMO_PROFESSOR.password }],
-    objectives: OBJECTIVES.map((objective) => ({ ...objective, studentLesson: true })),
-    messages: [],
-    assignments: [
-      lesson("a-interest", "fin-interest", "Lesson: Simple vs. compound interest", -3, 25),
-      lesson("a-fv", "fin-fv", "Lesson: Future value", 1, 25),
-      {
-        id: "a-reading", classCode: CLASS_CODE, title: "Read Chapter 5: Time Value of Money", type: "Reading", dueDate: isoDay(2), estMinutes: 40,
-        instructions: "Read sections 5.1–5.3 and bring one question to class.", assignedTo: "all", createdAt: now,
-      },
-      lesson("a-pv", "fin-pv", "Lesson: Present value", 4, 25),
-      lesson("a-annuity", "fin-annuity", "Lesson: Annuities and loan payments", 6, 25),
-    ],
-    received: {},
-    notes: {},
-    showSamples: true,
+export function buildProfessorView(d: ProfessorClassData, showSamples: boolean): { data: ProfessorData; students: Student[] } {
+  const received: Record<string, string[]> = {};
+  for (const row of d.completions) (received[row.assignment_id] ??= []).push(row.student_id);
+  const data: ProfessorData = {
+    objectives: d.objectives.map((row) => ({ id: row.key, dbId: row.id, title: row.title, objective: row.description, studentLesson: row.student_lesson, source: row.source ?? undefined })),
+    assignments: d.assignments.map((row) => ({
+      id: row.id, title: row.title, type: row.type, objectiveId: row.objective_key ?? undefined, dueDate: row.due_date, estMinutes: row.est_minutes,
+      instructions: row.instructions, assignedTo: row.assigned_to ?? "all", createdAt: row.created_at,
+    })),
+    messages: d.messages.map((row) => ({ id: row.id, studentKey: row.student_id, text: row.text, sentAt: row.sent_at, readAt: row.read_at ?? undefined })),
+    received,
+    notes: Object.fromEntries(d.notes.map((row) => [row.student_id, row.text])),
+    showSamples,
   };
-}
-
-export function readProfessorData(): ProfessorData {
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return defaultData();
-    const parsed = JSON.parse(raw) as Partial<ProfessorData>;
-    const base = defaultData();
+  const students: Student[] = d.enrollments.map((enrollment) => {
+    const id = enrollment.student_id;
+    const profile = d.profiles.find((row) => row.id === id);
+    const sessions = d.sessions.filter((row) => row.student_id === id);
+    const attempts = d.attempts.filter((row) => row.student_id === id);
+    const reflections = d.reflections.filter((row) => row.student_id === id);
+    const mastery = d.mastery.filter((row) => row.student_id === id);
+    const diagnostic = d.diagnostics.find((row) => row.student_id === id);
+    const lastActive = latest(...sessions.map((row) => row.started_at), ...attempts.map((row) => row.at), ...reflections.map((row) => row.at), ...mastery.map((row) => row.mastered_at), diagnostic?.taken_at);
     return {
-      professors: Array.isArray(parsed.professors) && parsed.professors.length ? parsed.professors : base.professors,
-      objectives: Array.isArray(parsed.objectives) && parsed.objectives.length ? parsed.objectives : base.objectives,
-      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
-      assignments: Array.isArray(parsed.assignments) ? parsed.assignments : base.assignments,
-      received: parsed.received && typeof parsed.received === "object" ? parsed.received : {},
-      notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
-      showSamples: parsed.showSamples ?? true,
+      key: id,
+      name: profile?.name ?? "Student",
+      email: profile?.email ?? "",
+      sample: false,
+      joinedAt: enrollment.joined_at,
+      lastActiveDaysAgo: daysSince(lastActive),
+      mastered: mastery.map((row) => row.objective_key),
+      weeklyMinutes: weeklyMinutes(sessions),
+      profile: profile?.learning_profile ?? null,
+      attempts: attempts.map((row) => ({ lessonId: row.lesson_key, question: row.question, chosen: row.chosen, correct: row.correct, hinted: row.hinted, at: row.at })),
+      reflections: reflections.map((row) => ({ lessonId: row.lesson_key, text: row.text, at: row.at })),
+      diagnostic: diagnostic ? { results: diagnostic.results, takenAt: diagnostic.taken_at } : null,
     };
-  } catch {
-    return defaultData();
-  }
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  return { data, students };
 }
 
-export function saveProfessorData(data: ProfessorData) {
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify(data));
-    window.dispatchEvent(new Event(storageChangeEvent));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function resetProfessorData() {
-  const data = defaultData();
-  saveProfessorData(data);
-  return data;
-}
-
-// Reads students enrolled in FIN101 from the student app's demo storage (read-only).
-export function readEnrolledStudents(): Student[] {
-  const students: Student[] = [];
-  try {
-    const accounts: unknown = JSON.parse(window.localStorage.getItem("study-spark-accounts") || "[]");
-    if (!Array.isArray(accounts)) return students;
-    for (const account of accounts) {
-      if (typeof account !== "object" || account === null || !("id" in account)) continue;
-      const { id, name, email } = account as { id: string; name?: string; email?: string };
-      let joinedAt: string | null = null;
-      let otherCourses: OtherCourse[] = [];
-      try {
-        const data = JSON.parse(window.localStorage.getItem(`study-spark-data:${id}`) || "null") as {
-          courses?: { id: number; name: string; code: string; courseTopics?: { id: string }[] }[];
-          completed?: string[];
-        } | null;
-        const course = data?.courses?.find((item) => item.code === CLASS_CODE);
-        if (!course) continue;
-        joinedAt = new Date(course.id).toISOString();
-        const done = new Set(Array.isArray(data?.completed) ? data.completed : []);
-        otherCourses = (data?.courses ?? []).filter((item) => item.code !== CLASS_CODE).map((item) => {
-          const topics = item.courseTopics ?? [];
-          return { name: item.name, code: item.code, topics: topics.length, completed: topics.filter((topic) => done.has(topic.id)).length };
-        });
-      } catch {
-        continue;
-      }
-      let mastered: string[] = [];
-      try {
-        const stored: unknown = JSON.parse(window.localStorage.getItem(`study-spark-finance-completed:${id}`) || "[]");
-        if (Array.isArray(stored)) mastered = stored.filter((item): item is string => typeof item === "string");
-      } catch { /* demo storage */ }
-      let profile: LearningProfile | null = null;
-      try {
-        profile = JSON.parse(window.localStorage.getItem(`study-spark-onboarding:${id}`) || "null") as LearningProfile | null;
-      } catch { /* demo storage */ }
-      const activity = readActivity(id);
-      students.push({
-        key: `account:${id}`,
-        name: name || "Student",
-        email: email || "",
-        sample: false,
-        joinedAt,
-        lastActiveDaysAgo: daysSince(activity.lastActiveAt),
-        mastered,
-        weeklyMinutes: weeklyMinutes(activity),
-        profile,
-        otherCourses,
-        attempts: activity.attempts,
-        reflections: activity.reflections,
-        diagnostic: readDiagnostic(id),
-      });
-    }
-  } catch { /* demo storage */ }
-  return students;
-}
+export const lessonObjectives = (data: ProfessorData): Objective[] => data.objectives.filter((item) => item.studentLesson);
 
 const sampleProfile = (goal: string, confidence: string, explanationPreference: string, practicePreference: string, biggestChallenge: string, motivation: string, dailyMinutes: number): LearningProfile =>
   ({ goal, confidence, explanationPreference, practicePreference, biggestChallenge, motivation, dailyMinutes });
 
 export const SAMPLE_STUDENTS: Student[] = [
   { key: "sample:maya", name: "Maya Rodriguez", email: "maya.r@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv"], weeklyMinutes: [95, 110, 120, 85],
-    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), attempts: [], reflections: [], diagnostic: null },
   { key: "sample:jordan", name: "Jordan Taylor", email: "jordan.t@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 1, mastered: ["fin-interest", "fin-fv"], weeklyMinutes: [60, 75, 70, 55],
-    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), attempts: [], reflections: [], diagnostic: null },
   { key: "sample:sam", name: "Sam Kim", email: "sam.k@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 6, mastered: [], weeklyMinutes: [40, 15, 0, 0],
-    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), attempts: [], reflections: [], diagnostic: null },
   { key: "sample:priya", name: "Priya Shah", email: "priya.s@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv", "fin-annuity"], weeklyMinutes: [80, 90, 105, 120],
-    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), attempts: [], reflections: [], diagnostic: null },
   { key: "sample:alex", name: "Alex Nguyen", email: "alex.n@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 3, mastered: ["fin-fv"], weeklyMinutes: [35, 45, 30, 25],
-    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), attempts: [], reflections: [], diagnostic: null },
   { key: "sample:chris", name: "Chris Okafor", email: "chris.o@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: null, mastered: [], weeklyMinutes: [0, 0, 0, 0],
-    profile: null, otherCourses: [], attempts: [], reflections: [], diagnostic: null },
+    profile: null, attempts: [], reflections: [], diagnostic: null },
 ];
 
 export function daysUntil(isoDate: string) {
@@ -285,8 +194,8 @@ export function isAssignmentDone(assignment: Assignment, student: Student, recei
   return (received[assignment.id] ?? []).includes(student.key);
 }
 
-export function studentStatus(student: Student, assignments: Assignment[], received: Record<string, string[]>): StudentStatus {
-  if (student.mastered.length >= OBJECTIVES.length) return "Mastered";
+export function studentStatus(student: Student, assignments: Assignment[], received: Record<string, string[]>, lessonCount = OBJECTIVES.length): StudentStatus {
+  if (lessonCount > 0 && student.mastered.length >= lessonCount) return "Mastered";
   const mine = assignments.filter((assignment) => isAssignedTo(assignment, student.key));
   const overdue = mine.some((assignment) => daysUntil(assignment.dueDate) < 0 && !isAssignmentDone(assignment, student, received));
   const inactive = student.lastActiveDaysAgo !== null && student.lastActiveDaysAgo >= 5;
@@ -335,14 +244,14 @@ export function computeAlerts(students: Student[], assignments: Assignment[], re
   return alerts.sort((a, b) => (a.severity === b.severity ? b.reasons.length - a.reasons.length : a.severity === "High" ? -1 : 1));
 }
 
-export function weeklySummary(professorName: string, students: Student[], assignments: Assignment[], received: Record<string, string[]>) {
+export function weeklySummary(professorName: string, cls: ClassInfo, objectives: Objective[], students: Student[], assignments: Assignment[], received: Record<string, string[]>) {
   const alerts = computeAlerts(students, assignments, received);
   const lines = [
-    `${CLASS_CODE} weekly summary — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
+    `${cls.code} weekly summary — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
     `Prepared for Prof. ${professorName}`,
     "",
     `Students: ${students.length}`,
-    ...OBJECTIVES.map((objective) => {
+    ...objectives.map((objective) => {
       const count = students.filter((student) => student.mastered.includes(objective.id)).length;
       return `• ${objective.title}: ${count} of ${students.length} mastered`;
     }),
@@ -365,29 +274,29 @@ function csvCell(value: string | number) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export function progressCsv(students: Student[], assignments: Assignment[], received: Record<string, string[]>) {
-  const header = ["Name", "Email", "Sample", "Status", "Objectives mastered", ...OBJECTIVES.map((objective) => objective.title), "Assignments done", "Assignments assigned", "Study time (min, 4 weeks)", "Last active"];
+export function progressCsv(objectives: Objective[], students: Student[], assignments: Assignment[], received: Record<string, string[]>) {
+  const header = ["Name", "Email", "Sample", "Status", "Objectives mastered", ...objectives.map((objective) => objective.title), "Assignments done", "Assignments assigned", "Study time (min, 4 weeks)", "Last active"];
   const rows = students.map((student) => {
     const mine = assignments.filter((assignment) => isAssignedTo(assignment, student.key));
     const done = mine.filter((assignment) => isAssignmentDone(assignment, student, received)).length;
     const minutes = totalMinutes(student);
     return [
-      student.name, student.email, student.sample ? "Yes" : "No", studentStatus(student, assignments, received),
-      `${student.mastered.length}/${OBJECTIVES.length}`,
-      ...OBJECTIVES.map((objective) => (student.mastered.includes(objective.id) ? "Mastered" : "Not yet")),
+      student.name, student.email, student.sample ? "Yes" : "No", studentStatus(student, assignments, received, objectives.length),
+      `${student.mastered.length}/${objectives.length}`,
+      ...objectives.map((objective) => (student.mastered.includes(objective.id) ? "Mastered" : "Not yet")),
       done, mine.length, minutes === null ? "Not tracked" : minutes, lastActiveLabel(student),
     ];
   });
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
-export function nudgeEmail(student: Student, professorName: string, reasons: string[]) {
+export function nudgeEmail(student: Student, professorName: string, reasons: string[], cls: ClassInfo) {
   const first = student.name.split(" ")[0];
-  const subject = `${CLASS_CODE}: checking in`;
+  const subject = `${cls.code}: checking in`;
   const body = [
     `Hi ${first},`,
     "",
-    `I'm checking in on your progress in ${CLASS_NAME}.`,
+    `I'm checking in on your progress in ${cls.name}.`,
     ...(reasons.length ? ["", ...reasons.map((reason) => `• ${reason}`)] : []),
     "",
     "Open Study Spark to pick up where you left off, and let me know if anything is getting in the way. I'm happy to help.",
@@ -395,21 +304,6 @@ export function nudgeEmail(student: Student, professorName: string, reasons: str
     `Prof. ${professorName}`,
   ].join("\n");
   return `mailto:${student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
-export const studentKeyFor = (accountId: string) => `account:${accountId}`;
-
-// Lets a student mark non-lesson work (a reading, a reflection) as done; the professor sees it as received.
-export function markAssignmentDone(assignmentId: string, studentKey: string, done: boolean) {
-  const data = readProfessorData();
-  const list = data.received[assignmentId] ?? [];
-  const next = done ? Array.from(new Set([...list, studentKey])) : list.filter((key) => key !== studentKey);
-  saveProfessorData({ ...data, received: { ...data.received, [assignmentId]: next } });
-}
-
-export function markMessageRead(messageId: string) {
-  const data = readProfessorData();
-  saveProfessorData({ ...data, messages: data.messages.map((message) => message.id === messageId ? { ...message, readAt: message.readAt ?? new Date().toISOString() } : message) });
 }
 
 // Share of answers missed on one practice question by real students, from saved attempts.

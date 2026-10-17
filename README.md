@@ -42,12 +42,15 @@ Join `FIN101`, then select **Start lesson**. Each lesson now opens a dedicated f
 
 This is structured, rules-based sample content, not AI-generated instruction, live instructor content, or a validated guarantee that every learner spends the target minutes. No real student records should be used in this demo.
 
-## v1.2: connected student and professor views (branch `main-v1.2`)
+## v1.2: real accounts and shared data (branch `main-v1.2`)
 
-Sign in from the home page: choose **I'm a student** or **I'm a professor** on the sign-in card (demo professor: `professor@scratch.test` / `teach123`). Professors land in `/professor`, which can also be opened directly. Both read the same browser storage, so actions show up on the other side right away, even across tabs.
+v1.2 runs on a Supabase database, so students and professors use real accounts from any device.
 
-- **Students:** a 2-minute check-in reorders the FIN101 lesson plan (missed topics first, known topics marked as quick reviews). Lessons save study time, every practice answer, hints used and the written reflection. The class page lists professor assignments (lessons complete on mastery; readings can be marked done), shows messages from the professor, and tracks a weekly study goal and streak. The Overview shows a class update banner once a student has joined.
-- **Professors:** see real study time, last activity, check-in results, practice accuracy, hints and reflections per student; real per-question miss rates in the question bank; send messages students see in the app and get read receipts.
-- Shared data lives in `src/app/classroom.ts` (student activity) and `src/app/professor/data.ts` (assignments, messages).
+- **Sign in:** on the home page choose **I'm a student** or **I'm a professor**. Both can create accounts. Demo accounts: `student@scratch.test` / `scratch123` and `professor@scratch.test` / `teach123` (they must be created once with the New user / New professor tabs).
+- **Professors** create classes with their own join code (choose the built-in Finance: Time Value of Money lessons or start empty), assign coursework, add objectives or import them from a syllabus PDF, and see each student's study time, check-in results, practice answers, hints, reflections and assignment status. They can message students in the app, get read receipts, keep private notes, see alerts and a weekly summary, and export a CSV.
+- **Students** join with the class code, take a 2-minute check-in that reorders their lesson plan, work through lessons with hints, and see professor assignments, messages, a weekly goal and streak. Their own classes, PDFs and topics are saved to their account too.
+- **Privacy:** row level security in `supabase/migrations` lets students see only their own work and professors only students in their classes.
+- **Setup for a new environment:** the app has the project URL and public (publishable) key built in, and also reads `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Database changes live in `supabase/migrations` (`supabase db push`).
+- Email confirmation is turned off in the Supabase project for the demo, so new accounts work immediately. Turn it back on in Supabase → Authentication before real students use it.
 
-Still to do: Supabase (so data syncs across devices and real accounts work) and live AI explanations, which need the team's Supabase and AI API keys.
+Still to do: live AI explanations (needs an AI API key).

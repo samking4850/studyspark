@@ -268,3 +268,7 @@
 a.secondary, a.primary { text-decoration: none; }
 .reflection { margin: 6px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--canvas); color: var(--ink); font-size: 13px; font-style: italic; line-height: 1.5; }
 .messageBox { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); line-height: 1.5; resize: vertical; }
+.joinCode { display: block; margin: 2px 0 6px; font: 800 24px Manrope, sans-serif; letter-spacing: .06em; color: var(--purple-dark); }
+.livePill { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 20px; background: var(--green-bg); color: var(--green); font-size: 12px; font-weight: 600; }
+.livePill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+a.primary { color: #fff !important; }

@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, CheckCircle2, Clock3, Flame, GraduationCap, Mail, Sparkles, Target } from "lucide-react";
 import type { StudentProfile } from "./StudentOnboarding";
 import FinanceLesson from "./FinanceLesson";
-import { DIAGNOSTIC_QUESTIONS, readActivity, readDiagnostic, saveDiagnostic, storageChangeEvent, studyStreak, weeklyMinutes, type Activity, type Diagnostic } from "./classroom";
-import { daysUntil, formatDue, isAssignedTo, markAssignmentDone, markMessageRead, readProfessorData, studentKeyFor, type ProfessorData } from "./professor/data";
+import { DIAGNOSTIC_QUESTIONS, studyStreak, weeklyMinutes } from "./classroom";
+import { loadStudentClass, markMessageRead, saveDiagnostic, saveMastery, setCompletion, type ClassInfo, type StudentClassData } from "./cloud";
+import { daysUntil, formatDue } from "./professor/data";
 import "./classroom.css";
-
-export const FINANCE_CODE = "FIN101";
-export const FINANCE_NAME = "Introduction to Finance";
 
 type Lesson = { id: string; title: string; objective: string; short: string; explanation: string; steps: string[]; application: string; prompt: string; choices: string[]; answer: number; feedback: string };
 const lessons: Lesson[] = [
@@ -19,76 +17,82 @@ const lessons: Lesson[] = [
   { id:"fin-annuity", title:"Annuities and loan payments", objective:"Recognize equal periodic cash flows", short:"Understand repeated payments such as loans and savings plans.", explanation:"An annuity is a series of equal payments at regular intervals. An ordinary annuity pays at the end of each period; an annuity due pays at the beginning.", steps:["Identify the repeating payment and frequency.","Determine whether payments occur at the beginning or end of each period.","Connect the cash-flow pattern to savings or loan repayment."], application:"Monthly car-loan payments are a familiar example of an annuity-like payment stream.", prompt:"Which example best represents an ordinary annuity?", choices:["One $5,000 gift today", "$100 paid at the end of each month", "Different payments on random dates", "$100 paid at the beginning of each month"], answer:1, feedback:"An ordinary annuity has equal payments at regular intervals, made at the end of each period." },
 ];
 
-const formatDate = (date: Date) => date.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
-function addDays(date: Date, days: number) { const copy = new Date(date); copy.setDate(copy.getDate() + days); return copy; }
 
-export default function FinanceClass({ profile, accountId, onBack }: { profile: StudentProfile; accountId: string; onBack: () => void }) {
-  const storageKey = `study-spark-finance-completed:${accountId}`;
-  const studentKey = studentKeyFor(accountId);
-  const [completed, setCompleted] = useState<string[]>([]);
+export default function FinanceClass({ cls, profile, userId, onBack }: { cls: ClassInfo; profile: StudentProfile; userId: string; onBack: () => void }) {
+  const [classData, setClassData] = useState<StudentClassData | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [active, setActive] = useState<string | null>(null);
-  const [today, setToday] = useState<Date | null>(null);
-  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
-  const [activity, setActivity] = useState<Activity | null>(null);
-  const [classData, setClassData] = useState<ProfessorData | null>(null);
   const [takingCheck, setTakingCheck] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const refresh = useCallback(() => {
-    setDiagnostic(readDiagnostic(accountId));
-    setActivity(readActivity(accountId));
-    setClassData(readProfessorData());
-  }, [accountId]);
+  const refresh = useCallback(async () => {
+    try { setClassData(await loadStudentClass(cls.id, userId)); setLoadError(""); }
+    catch { setLoadError("Couldn't load this class. Check your connection and try again."); }
+  }, [cls.id, userId]);
 
+  // Load now, when the window regains focus, and every 30 seconds so professor updates show up.
   useEffect(() => {
-    setToday(new Date());
-    try { const stored = JSON.parse(window.localStorage.getItem(storageKey) || "[]"); if (Array.isArray(stored)) setCompleted(stored.filter((x): x is string => typeof x === "string")); } catch { /* demo storage */ }
-    refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener(storageChangeEvent, refresh);
-    return () => { window.removeEventListener("storage", refresh); window.removeEventListener(storageChangeEvent, refresh); };
-  }, [storageKey, refresh]);
+    void refresh();
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(onFocus, 30_000);
+    return () => { window.removeEventListener("focus", onFocus); window.clearInterval(timer); };
+  }, [refresh]);
 
-  const current = lessons.find(x => x.id === active);
+  const hasLessons = cls.template === "finance-tvm";
+  const completed = useMemo(() => (classData?.mastery ?? []).map((row) => row.objective_key), [classData]);
+  const diagnostic = classData?.diagnostic ?? null;
   const minutes = Math.max(10, Math.min(120, profile.dailyMinutes || 30));
-  // Lessons the diagnostic check-in shows the student needs most come first.
+  // Lessons the check-in shows the student needs most come first.
   const plan = useMemo(() => {
-    const ordered = diagnostic ? [...lessons].sort((a, b) => Number(diagnostic.results[a.id] ?? false) - Number(diagnostic.results[b.id] ?? false)) : lessons;
-    return ordered.map((lesson, i) => ({ ...lesson, day:i + 1, minutes:Math.min(minutes, 25), done:completed.includes(lesson.id), focus: diagnostic ? diagnostic.results[lesson.id] === false : false, review: diagnostic ? diagnostic.results[lesson.id] === true : false }));
-  }, [completed, minutes, diagnostic]);
+    if (!hasLessons) return [];
+    const results = diagnostic?.results;
+    const ordered = results ? [...lessons].sort((a, b) => Number(results[a.id] ?? false) - Number(results[b.id] ?? false)) : lessons;
+    return ordered.map((lesson, i) => ({ ...lesson, day: i + 1, minutes: Math.min(minutes, 25), done: completed.includes(lesson.id), focus: results ? results[lesson.id] === false : false, review: results ? results[lesson.id] === true : false }));
+  }, [completed, minutes, diagnostic, hasLessons]);
 
-  if (current) return <FinanceLesson key={current.id} lesson={current} profile={profile} accountId={accountId} minutes={Math.min(minutes,25)} alreadyMastered={completed.includes(current.id)} onBack={()=>{setActive(null);refresh();}} onMastered={()=>{const next=Array.from(new Set([...completed,current.id]));setCompleted(next);try{window.localStorage.setItem(storageKey,JSON.stringify(next));window.dispatchEvent(new Event(storageChangeEvent));}catch{/* demo storage */}}}/>;
+  const current = lessons.find((x) => x.id === active);
+  if (current) return <FinanceLesson key={current.id} lesson={current} profile={profile} classId={cls.id} userId={userId} minutes={Math.min(minutes, 25)} alreadyMastered={completed.includes(current.id)} onBack={() => { setActive(null); void refresh(); }} onMastered={() => { void saveMastery(cls.id, userId, current.id).then(refresh); }} />;
 
-  const assignments = (classData?.assignments ?? []).filter((assignment) => assignment.classCode === FINANCE_CODE && isAssignedTo(assignment, studentKey)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const messages = (classData?.messages ?? []).filter((message) => message.studentKey === studentKey).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
-  const unread = messages.filter((message) => !message.readAt);
-  const week = activity ? weeklyMinutes(activity)[3] : 0;
+  const objectives = classData?.objectives ?? [];
+  const lessonCount = objectives.filter((item) => item.student_lesson).length;
+  const done = (assignmentId: string, objectiveKey: string | null) => objectiveKey ? completed.includes(objectiveKey) : (classData?.completions ?? []).some((row) => row.assignment_id === assignmentId);
+  const assignments = classData?.assignments ?? [];
+  const unread = (classData?.messages ?? []).filter((message) => !message.read_at);
+  const sessions = classData?.sessions ?? [];
+  const week = weeklyMinutes(sessions)[3];
   const weekGoal = minutes * 5;
-  const streak = activity ? studyStreak(activity) : 0;
+  const streak = studyStreak(sessions);
+  const nextDue = assignments.filter((item) => !done(item.id, item.objective_key) && daysUntil(item.due_date) >= 0)[0];
 
   return <section className="finance-class">
     <button className="back-link" onClick={onBack}><ArrowLeft size={16}/> My classes</button>
-    <div className="finance-hero"><div><span className="finance-kicker"><GraduationCap size={15}/> ENROLLED · {FINANCE_CODE} · DEMO COURSE</span><h1>{FINANCE_NAME}</h1><p>Professor Morgan Lee · Current unit: Time Value of Money</p><span className="finance-tag"><CalendarDays size={15}/> Next quiz: {today ? formatDate(addDays(today, 5)) : "In 5 days"} · 4 learning objectives</span></div><div className="finance-progress"><strong>{completed.length} / 4</strong><span>lessons mastered</span><div className="finance-progress-track"><div style={{width:`${Math.min(100,completed.length/4*100)}%`}}/></div></div></div>
+    <div className="finance-hero"><div><span className="finance-kicker"><GraduationCap size={15}/> ENROLLED · {cls.code}</span><h1>{cls.name}</h1><p>{cls.professorName ? `Professor ${cls.professorName}` : "Your professor"}{cls.unit ? ` · Current unit: ${cls.unit}` : ""}</p><span className="finance-tag"><CalendarDays size={15}/> {nextDue ? `Next due: ${nextDue.title} · ${formatDue(nextDue.due_date)}` : "Nothing due right now"} · {objectives.length} learning objectives</span></div><div className="finance-progress"><strong>{completed.length} / {lessonCount || objectives.length}</strong><span>lessons mastered</span><div className="finance-progress-track"><div style={{width:`${Math.min(100,completed.length/Math.max(1, lessonCount)*100)}%`}}/></div></div></div>
+
+    {loadError && <p className="inline-error" role="alert">{loadError}</p>}
+    {!classData && !loadError && <p className="cls-note">Loading your class…</p>}
 
     {unread.length > 0 && <div className="cls-messages">{unread.map((message) => <div className="cls-message" key={message.id}>
-      <Mail size={18}/><div><strong>Message from Prof. {message.from}</strong><p>{message.text}</p><small>{new Date(message.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small></div>
-      <button type="button" className="secondary-button" onClick={() => { markMessageRead(message.id); refresh(); }}>Got it</button>
+      <Mail size={18}/><div><strong>Message from {cls.professorName ? `Prof. ${cls.professorName}` : "your professor"}</strong><p>{message.text}</p><small>{new Date(message.sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small></div>
+      <button type="button" className="secondary-button" onClick={() => { void markMessageRead(message.id).then(refresh); }}>Got it</button>
     </div>)}</div>}
 
     <div className="cls-row">
       <section className="cls-card">
         <div className="cls-card-head"><div><span className="eyebrow">FROM YOUR PROFESSOR</span><h2>Assignments</h2></div><span className="cls-count">{assignments.length}</span></div>
         {assignments.length ? assignments.map((assignment) => {
-          const lessonDone = assignment.objectiveId ? completed.includes(assignment.objectiveId) : (classData?.received[assignment.id] ?? []).includes(studentKey);
-          const days = daysUntil(assignment.dueDate);
-          const dueText = lessonDone ? "Done" : days < 0 ? `Overdue · was due ${formatDue(assignment.dueDate)}` : days === 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due ${formatDue(assignment.dueDate)}`;
+          const isDone = done(assignment.id, assignment.objective_key);
+          const days = daysUntil(assignment.due_date);
+          const dueText = isDone ? "Done" : days < 0 ? `Overdue · was due ${formatDue(assignment.due_date)}` : days === 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due ${formatDue(assignment.due_date)}`;
+          const canStart = assignment.objective_key && hasLessons && lessons.some((lesson) => lesson.id === assignment.objective_key);
           return <div className="cls-item" key={assignment.id}>
-            <span className={`cls-check ${lessonDone ? "done" : days < 0 ? "late" : ""}`}>{lessonDone ? <Check size={14}/> : <BookOpen size={13}/>}</span>
-            <div><strong>{assignment.title}</strong><small className={!lessonDone && days < 0 ? "cls-late" : ""}>{assignment.type} · ~{assignment.estMinutes} min · {dueText}</small>{assignment.instructions && !lessonDone && <p>{assignment.instructions}</p>}</div>
-            {assignment.objectiveId
-              ? !lessonDone && <button type="button" className="small-link" onClick={() => setActive(assignment.objectiveId!)}>Start <ArrowRight size={12}/></button>
-              : <button type="button" className="small-link" aria-pressed={lessonDone} onClick={() => { markAssignmentDone(assignment.id, studentKey, !lessonDone); refresh(); }}>{lessonDone ? "Undo" : "Mark done"}</button>}
+            <span className={`cls-check ${isDone ? "done" : days < 0 ? "late" : ""}`}>{isDone ? <Check size={14}/> : <BookOpen size={13}/>}</span>
+            <div><strong>{assignment.title}</strong><small className={!isDone && days < 0 ? "cls-late" : ""}>{assignment.type} · ~{assignment.est_minutes} min · {dueText}</small>{assignment.instructions && !isDone && <p>{assignment.instructions}</p>}</div>
+            {assignment.objective_key
+              ? canStart && !isDone && <button type="button" className="small-link" onClick={() => setActive(assignment.objective_key!)}>Start <ArrowRight size={12}/></button>
+              : <button type="button" className="small-link" aria-pressed={isDone} disabled={busy === assignment.id} onClick={() => { setBusy(assignment.id); void setCompletion(assignment.id, userId, !isDone).then(refresh).finally(() => setBusy(null)); }}>{isDone ? "Undo" : "Mark done"}</button>}
           </div>;
-        }) : <p className="cls-empty">No assignments yet. Your professor's coursework will show up here.</p>}
+        }) : <p className="cls-empty">No assignments yet. Your professor&apos;s coursework will show up here.</p>}
       </section>
       <section className="cls-card">
         <div className="cls-card-head"><div><span className="eyebrow">THIS WEEK</span><h2>Your study habit</h2></div></div>
@@ -103,14 +107,20 @@ export default function FinanceClass({ profile, accountId, onBack }: { profile: 
 
     <div className="finance-info-grid"><div className="finance-info-card"><Target size={20}/><strong>Your learning goal</strong><p>{profile.goal}</p></div><div className="finance-info-card"><Clock3 size={20}/><strong>Your study schedule</strong><p>{minutes} minutes available daily · {Math.min(minutes,25)} minute core lessons</p></div><div className="finance-info-card"><Sparkles size={20}/><strong>Your personalized approach</strong><p>{profile.explanationPreference} + {profile.practicePreference.toLowerCase()}</p></div></div>
 
-    {!diagnostic && !takingCheck && <div className="cls-diagnostic-cta"><div><strong>Take a 2-minute check-in</strong><p>Four quick questions show what you already know, so your lesson plan starts with what you need most.</p></div><button type="button" className="primary-button" onClick={() => setTakingCheck(true)}>Start check-in <ArrowRight size={15}/></button></div>}
-    {takingCheck && <DiagnosticCheck onDone={(results) => { setDiagnostic(saveDiagnostic(accountId, results)); setTakingCheck(false); setActivity(readActivity(accountId)); }} onCancel={() => setTakingCheck(false)} />}
+    {hasLessons && !diagnostic && !takingCheck && classData && <div className="cls-diagnostic-cta"><div><strong>Take a 2-minute check-in</strong><p>Four quick questions show what you already know, so your lesson plan starts with what you need most.</p></div><button type="button" className="primary-button" onClick={() => setTakingCheck(true)}>Start check-in <ArrowRight size={15}/></button></div>}
+    {takingCheck && <DiagnosticCheck onDone={(results) => { setTakingCheck(false); void saveDiagnostic(cls.id, userId, results).then(refresh); }} onCancel={() => setTakingCheck(false)} />}
 
-    <div className="finance-section-heading"><div><span className="eyebrow">BUILT FOR YOUR NEXT QUIZ</span><h2>Your personalized lesson plan</h2><p>{diagnostic ? "Ordered by your check-in: topics you missed come first, topics you already know become quick reviews." : "Professor-defined objectives, ordered from foundations to applications. Lessons adapt their presentation to your onboarding preferences."}</p></div>{diagnostic && <button type="button" className="text-button" onClick={() => setTakingCheck(true)}>Retake check-in</button>}</div>
-    {profile.motivation && <div className="finance-motivation"><Sparkles size={17}/><span><strong>Remember your why:</strong> {profile.motivation}</span></div>}
-    <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className={`finance-lesson ${active===lesson.id?"finance-lesson-active":""}`}><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : "UPCOMING"}</span>{!lesson.done && lesson.focus && <span className="cls-badge focus">Focus: missed in your check-in</span>}{!lesson.done && lesson.review && <span className="cls-badge review">Quick review: you got this right</span>}<h3>{lesson.title}</h3><p>{lesson.short}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={()=>{setActive(lesson.id);}}>{lesson.done?"Review lesson":"Start lesson"} <ArrowRight size={15}/></button></div>
+    {hasLessons ? <>
+      <div className="finance-section-heading"><div><span className="eyebrow">BUILT FOR YOUR PROFESSOR&apos;S OBJECTIVES</span><h2>Your personalized lesson plan</h2><p>{diagnostic ? "Ordered by your check-in: topics you missed come first, topics you already know become quick reviews." : "Ordered from foundations to applications. Lessons adapt their presentation to your learning profile."}</p></div>{diagnostic && <button type="button" className="text-button" onClick={() => setTakingCheck(true)}>Retake check-in</button>}</div>
+      {profile.motivation && <div className="finance-motivation"><Sparkles size={17}/><span><strong>Remember your why:</strong> {profile.motivation}</span></div>}
+      <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className="finance-lesson"><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : "UPCOMING"}</span>{!lesson.done && lesson.focus && <span className="cls-badge focus">Focus: missed in your check-in</span>}{!lesson.done && lesson.review && <span className="cls-badge review">Quick review: you got this right</span>}<h3>{lesson.title}</h3><p>{lesson.short}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={()=>{setActive(lesson.id);}}>{lesson.done?"Review lesson":"Start lesson"} <ArrowRight size={15}/></button></div>
 </article>)}</div>
-    <p className="finance-disclaimer">Demonstration: course, professor, quiz date, questions, and objectives are sample content. Your check-in results, study time, practice answers and reflections are shared with your professor in this demo and stored in this browser only.</p>
+    </> : <section className="cls-card" style={{ marginTop: 16 }}>
+      <div className="cls-card-head"><div><span className="eyebrow">LEARNING OBJECTIVES</span><h2>What you&apos;ll learn in this class</h2></div></div>
+      {objectives.length ? objectives.map((objective) => <div className="cls-item" key={objective.id}><span className="cls-check"><Target size={13}/></span><div><strong>{objective.title}</strong>{objective.description && <small>{objective.description}</small>}</div></div>) : <p className="cls-empty">Your professor hasn&apos;t added objectives yet.</p>}
+      <p className="cls-note">Interactive lessons are available for finance classes today. Use your assignments and Study Spark&apos;s planner for this class.</p>
+    </section>}
+    <p className="finance-disclaimer">Your check-in, study time, practice answers and reflections are saved to your account and shared only with your professor for this class.</p>
   </section>;
 }
 

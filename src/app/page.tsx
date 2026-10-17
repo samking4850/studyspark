@@ -1,7 +1,8 @@
 "use client";
 
 import StudentOnboarding, { type StudentProfile } from "./StudentOnboarding";
-import FinanceClass, { FINANCE_CODE, FINANCE_NAME } from "./FinanceClass";
+import FinanceClass from "./FinanceClass";
+import { currentProfile, findClassByCode, joinClass as joinCloudClass, loadWorkspace, myEnrolledClasses, normalizeCode, saveLearningProfile, saveWorkspace, signIn as cloudSignIn, signOut as cloudSignOut, signUp as cloudSignUp, type ClassInfo, type Profile } from "./cloud";
 import ClassUpdates from "./ClassUpdates";
 import ProfessorSignInForm from "./ProfessorSignInForm";
 
@@ -79,74 +80,11 @@ type ExtractedDocument = {
 type Page = "Overview" | "My courses" | "Course details" | "Study planner" | "Study guides" | "My progress" | "Finance classroom";
 
 type DemoData = { courses: Course[]; completed: string[] };
-type AccountRecord = {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-  createdAt: string;
-  seedData: DemoData;
-};
+type Account = { id: string; name: string; email: string };
 const initialDemoData: DemoData = { courses: [], completed: [] };
 const demoStorageEvent = "study-spark-storage-change";
-const accountsStorageKey = "study-spark-accounts";
-const activeAccountStorageKey = "study-spark-active-account";
 const scratchAccountEmail = "student@scratch.test";
 const scratchAccountPassword = "scratch123";
-const legacySampleCourseNames = new Set(["Principles of Finance", "Behavioral Psychology", "Data & Decisions"]);
-
-function readStoredAccounts(): AccountRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(accountsStorageKey);
-    if (!raw) {
-      const scratch = createScratchAccount();
-      window.localStorage.setItem(accountsStorageKey, JSON.stringify([scratch]));
-      return [scratch];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [createScratchAccount()];
-    const accounts = parsed.filter((item): item is AccountRecord => typeof item === "object" && item !== null && "id" in item && "email" in item && "password" in item && "name" in item && "seedData" in item);
-    const scratch = accounts.find((account) => account.email === scratchAccountEmail);
-    if (scratch) {
-      const seededNames = scratch.seedData.courses.map((course) => course.name);
-      if (seededNames.length && seededNames.every((name) => legacySampleCourseNames.has(name))) {
-        scratch.seedData = { courses: [], completed: [] };
-        window.localStorage.removeItem(`study-spark-data:${scratch.id}`);
-        window.localStorage.setItem(accountsStorageKey, JSON.stringify(accounts));
-      }
-    }
-    return accounts;
-  } catch {
-    return [createScratchAccount()];
-  }
-}
-
-function createScratchAccount(name = "Jamie Davis"): AccountRecord {
-  return {
-    id: `scratch-${Date.now()}`,
-    name,
-    email: scratchAccountEmail,
-    password: scratchAccountPassword,
-    createdAt: new Date().toISOString(),
-    seedData: { courses: [], completed: [] },
-  };
-}
-
-function useStoredAccounts() {
-  const [accounts, setAccounts] = useState<AccountRecord[]>([]);
-  const persist = useCallback((next: AccountRecord[]) => {
-    setAccounts(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(accountsStorageKey, JSON.stringify(next));
-    }
-  }, []);
-  const hydrate = useCallback(() => {
-    const next = readStoredAccounts();
-    setAccounts(next);
-  }, []);
-  return { accounts, persist, hydrate };
-}
 
 function subscribeToDemoStorage(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -285,43 +223,54 @@ function buildStudyPlan(courses: Course[], completed: string[]) {
 }
 
 export default function Home() {
-  const { accounts, persist: persistAccounts, hydrate: hydrateAccounts } = useStoredAccounts();
-  const [activeAccountId, setActiveAccountIdState] = useState<string | null>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [mounted, setMounted] = useState(false);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [classes, setClasses] = useState<ClassInfo[]>([]);
+  const [openClass, setOpenClass] = useState<ClassInfo | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
-  useEffect(() => {
-    const loadedAccounts = readStoredAccounts();
-    hydrateAccounts();
-    window.localStorage.removeItem(activeAccountStorageKey);
-    const saved = window.sessionStorage.getItem(activeAccountStorageKey);
-    if (saved && loadedAccounts.some((account) => account.id === saved)) {
-      setActiveAccountIdState(saved);
-    }
-    setMounted(true);
-  }, [hydrateAccounts]);
-
-  const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? null;
-  useEffect(() => {
-    if (!activeAccountId) { setStudentProfile(null); setEditingProfile(false); return; }
+  // Load the student's saved workspace and classes from their account.
+  const enterAccount = useCallback(async (profile: Profile) => {
+    if (profile.role === "professor") { window.location.assign("/professor"); return; }
+    const workspace = await loadWorkspace(profile.id);
     try {
-      const stored = window.localStorage.getItem(`study-spark-onboarding:${activeAccountId}`);
-      setStudentProfile(stored ? JSON.parse(stored) as StudentProfile : null);
-    } catch { setStudentProfile(null); }
+      window.localStorage.setItem(`study-spark-data:${profile.id}`, JSON.stringify(workspace ?? initialDemoData));
+      window.dispatchEvent(new Event(demoStorageEvent));
+    } catch { /* the in-memory copy still works */ }
+    setStudentProfile((profile.learning_profile as StudentProfile | null) ?? null);
+    setClasses(await myEnrolledClasses(profile.id));
     setEditingProfile(false);
-  }, [activeAccountId]);
-  function saveStudentProfile(profile: StudentProfile) {
-    if (!activeAccountId) return;
-    try {
-      window.localStorage.setItem(`study-spark-onboarding:${activeAccountId}`, JSON.stringify(profile));
-      setStudentProfile(profile);
-      setEditingProfile(false);
-    } catch { window.alert("Could not save your learning profile. Check browser storage permissions."); }
+    setActiveAccount({ id: profile.id, name: profile.name, email: profile.email });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const profile = await currentProfile();
+      if (profile && !cancelled) await enterAccount(profile);
+      if (!cancelled) setMounted(true);
+    })();
+    return () => { cancelled = true; };
+  }, [enterAccount]);
+
+  async function saveStudentProfile(profile: StudentProfile) {
+    if (!activeAccount) return;
+    const error = await saveLearningProfile(activeAccount.id, profile);
+    if (error) { window.alert(`Could not save your learning profile. ${error}`); return; }
+    setStudentProfile(profile);
+    setEditingProfile(false);
   }
 
   const accountDemoKey = activeAccount ? `study-spark-data:${activeAccount.id}` : "study-spark-data";
-  const { value: demoData, save: saveDemoData, hasStoredData, error: storageError } = useDemoStorage(accountDemoKey, activeAccount?.seedData ?? initialDemoData);
+  const { value: demoData, save: saveLocalData, hasStoredData, error: storageError } = useDemoStorage(accountDemoKey, initialDemoData);
+  // Keep a local copy for speed and save every change to the student's account.
+  const saveDemoData = useCallback((next: DemoData) => {
+    const ok = saveLocalData(next);
+    if (ok && activeAccount) void saveWorkspace(activeAccount.id, next);
+    return ok;
+  }, [saveLocalData, activeAccount]);
   const { courses, completed } = demoData;
   const [activePage, setActivePage] = useState<Page>("Overview");
   const [courseDialog, setCourseDialog] = useState(false);
@@ -338,72 +287,43 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState(scratchAccountEmail);
   const [authPassword, setAuthPassword] = useState(scratchAccountPassword);
   const saved = hasStoredData && !storageError;
-  const [financeMastered, setFinanceMastered] = useState<string[]>([]);
-  useEffect(() => {
-    if (!activeAccountId) return;
-    const read = () => { try { const stored: unknown = JSON.parse(window.localStorage.getItem(`study-spark-finance-completed:${activeAccountId}`) || "[]"); setFinanceMastered(Array.isArray(stored) ? stored.filter((item): item is string => typeof item === "string") : []); } catch { setFinanceMastered([]); } };
-    read();
-    window.addEventListener(demoStorageEvent, read);
-    return () => window.removeEventListener(demoStorageEvent, read);
-  }, [activeAccountId, activePage]);
   const studyReadyCourses = useMemo(() => getStudyReadyCourses(courses), [courses]);
 
-  const setActiveAccountId = useCallback((nextId: string | null) => {
-    setActiveAccountIdState(nextId);
-    if (typeof window !== "undefined") {
-      if (nextId) {
-        window.sessionStorage.setItem(activeAccountStorageKey, nextId);
-      } else {
-        window.sessionStorage.removeItem(activeAccountStorageKey);
-      }
-    }
-  }, []);
-
-  function signIn(event: FormEvent<HTMLFormElement>) {
+  async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const match = accounts.find((account) => account.email.toLowerCase() === authEmail.trim().toLowerCase() && account.password === authPassword.trim());
-    if (!match) {
-      setAuthError("No matching draft account was found. Try the scratch account or create a new one.");
-      return;
-    }
-    setActiveAccountId(match.id);
+    setAuthBusy(true);
+    const { profile, error } = await cloudSignIn(authEmail, authPassword.trim());
+    setAuthBusy(false);
+    if (error || !profile) { setAuthError(error || "Couldn't sign in. Please try again."); return; }
     setAuthError("");
     setActivePage("Overview");
+    await enterAccount(profile);
   }
 
-  function createAccount(event: FormEvent<HTMLFormElement>) {
+  async function createAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = authName.trim();
-    const email = authEmail.trim().toLowerCase();
-    const password = authPassword.trim();
-    if (!name || !email || !password) {
+    if (!name || !authEmail.trim() || !authPassword.trim()) {
       setAuthError("Add a name, email, and password to create an account.");
       return;
     }
-    if (accounts.some((account) => account.email.toLowerCase() === email)) {
-      setAuthError("An account with that email already exists. Sign in instead.");
-      return;
-    }
-    const nextAccount: AccountRecord = {
-      id: `account-${Date.now()}`,
-      name,
-      email,
-      password,
-      createdAt: new Date().toISOString(),
-      seedData: { courses: [], completed: [] },
-    };
-    const nextAccounts = [...accounts, nextAccount];
-    persistAccounts(nextAccounts);
-    setActiveAccountId(nextAccount.id);
+    setAuthBusy(true);
+    const { profile, error } = await cloudSignUp(name, authEmail, authPassword.trim(), "student");
+    setAuthBusy(false);
+    if (error || !profile) { setAuthError(error || "Couldn't create your account. Please try again."); return; }
     setAuthError("");
     setAuthMode("signin");
-    setAuthEmail(email);
-    setAuthPassword(password);
     setActivePage("Overview");
+    await enterAccount(profile);
   }
 
-  function signOut() {
-    setActiveAccountId(null);
+  async function signOut() {
+    if (activeAccount) { try { window.localStorage.removeItem(`study-spark-data:${activeAccount.id}`); } catch { /* nothing cached */ } }
+    await cloudSignOut();
+    setActiveAccount(null);
+    setStudentProfile(null);
+    setClasses([]);
+    setOpenClass(null);
     setAuthMode("signin");
     setAuthEmail(scratchAccountEmail);
     setAuthPassword(scratchAccountPassword);
@@ -471,7 +391,7 @@ export default function Home() {
                   <label>Email<input value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} type="email" autoComplete="username" placeholder="you@example.com" required /></label>
                   <label>Password<input value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} type="password" autoComplete="current-password" placeholder="Your password" required /></label>
                   {authError && <p className="inline-error" role="alert">{authError}</p>}
-                  <button type="submit" className="primary-button">Sign in <ArrowRight size={15} /></button>
+                  <button type="submit" className="primary-button" disabled={authBusy}>{authBusy ? "Signing in…" : <>Sign in <ArrowRight size={15} /></>}</button>
                 </form>
               ) : (
                 <form className="auth-form" onSubmit={createAccount}>
@@ -479,16 +399,16 @@ export default function Home() {
                   <label>Email<input value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} type="email" autoComplete="email" placeholder="you@example.com" required /></label>
                   <label>Password<input value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} type="password" autoComplete="new-password" minLength={6} placeholder="At least 6 characters" required /></label>
                   {authError && <p className="inline-error" role="alert">{authError}</p>}
-                  <button type="submit" className="primary-button">Create account <ArrowRight size={15} /></button>
+                  <button type="submit" className="primary-button" disabled={authBusy}>{authBusy ? "Creating account…" : <>Create account <ArrowRight size={15} /></>}</button>
                 </form>
               )}
 
               <div className="scratch-login">
-                <div><strong>Just exploring?</strong><p>Try the preloaded scratch student workspace.</p></div>
-                <button type="button" className="secondary-button" onClick={() => { setAuthMode("signin"); setAuthEmail(scratchAccountEmail); setAuthPassword(scratchAccountPassword); setAuthError(""); }}>Use scratch account</button>
+                <div><strong>Just exploring?</strong><p>Use the demo student account.</p></div>
+                <button type="button" className="secondary-button" onClick={() => { setAuthMode("signin"); setAuthEmail(scratchAccountEmail); setAuthPassword(scratchAccountPassword); setAuthError(""); }}>Use demo student</button>
                 <small>{scratchAccountEmail} · {scratchAccountPassword}</small>
               </div>
-              <p className="auth-demo-note">Demo mode: accounts and class data are saved in this browser only. Study guides unlock after you add a class, an exam date, and an uploaded PDF. Live AI-generated guides and quizzes are not connected.</p>
+              <p className="auth-demo-note">Your account, classes and progress are saved securely, so you can sign in from any device. Study guides unlock after you add a class, an exam date, and an uploaded PDF.</p>
               </>}
             </section>
           </div>
@@ -502,17 +422,30 @@ export default function Home() {
     return <StudentOnboarding key={activeAccount.id} name={activeAccount.name} initial={studentProfile} onSave={saveStudentProfile} />;
   }
 
-  function joinClass(event: FormEvent<HTMLFormElement>) {
+  async function joinClass(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (joinCode.trim().replace(/[-\s]/g, "").toUpperCase() !== FINANCE_CODE) {
-      setJoinError("Demo code not recognized. Try FIN101.");
-      return;
-    }
-    if (!courses.some((course) => course.code === FINANCE_CODE)) {
-      const newCourse: Course = { id: Date.now(), name: FINANCE_NAME, code: FINANCE_CODE, color: "blue", progress: 0, exam: "Upcoming", description: "Professor Morgan Lee · Time Value of Money · Sample college class", topics: 4, courseTopics: [], documents: [] };
+    if (!activeAccount) return;
+    const cls = await findClassByCode(joinCode);
+    if (!cls) { setJoinError("No class uses that code. Check the code with your professor."); return; }
+    const error = await joinCloudClass(cls.id, activeAccount.id);
+    if (error) { setJoinError(error); return; }
+    const enrolled = await myEnrolledClasses(activeAccount.id);
+    setClasses(enrolled);
+    const withName = enrolled.find((item) => item.id === cls.id) ?? cls;
+    if (!courses.some((course) => course.code === cls.code)) {
+      const newCourse: Course = { id: Date.now(), name: cls.name, code: cls.code, color: "blue", progress: 0, exam: "Upcoming", description: [withName.professorName ? `Professor ${withName.professorName}` : "", cls.unit ?? ""].filter(Boolean).join(" · "), topics: 0, courseTopics: [], documents: [] };
       saveDemoData({ ...demoData, courses: [...courses, newCourse] });
     }
+    setOpenClass(withName);
     setJoinDialog(false); setJoinCode(""); setJoinError(""); setActivePage("Finance classroom");
+  }
+
+  function openJoinedClass(code: string) {
+    const cls = classes.find((item) => item.code === normalizeCode(code));
+    if (!cls) return false;
+    setOpenClass(cls);
+    setActivePage("Finance classroom");
+    return true;
   }
 
   function submitCourse(event: FormEvent<HTMLFormElement>) {
@@ -625,7 +558,7 @@ export default function Home() {
         <button type="button" className="onboarding-edit" onClick={() => setEditingProfile(true)}><Target size={16}/> My learning profile</button>
         <button className="profile-button" onClick={signOut}>
           <span className="avatar">{(activeAccount?.name ?? "JD").split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span>
-          <span className="profile-copy"><strong>{activeAccount?.name ?? "Jamie Davis"}</strong><small>Student account</small></span>
+          <span className="profile-copy"><strong>{activeAccount?.name ?? "Student"}</strong><small>Sign out</small></span>
           <MoreHorizontal size={18} className="profile-more" />
         </button>
       </aside>
@@ -642,8 +575,8 @@ export default function Home() {
         </header>
 
         <div className="content">
-          {activePage === "Overview" && courses.some((course) => course.code === FINANCE_CODE) && <ClassUpdates accountId={activeAccount.id} mastered={financeMastered} onOpen={() => setActivePage("Finance classroom")} />}
-          {activePage === "Overview" && !courses.some((course) => course.code === FINANCE_CODE) && <div className="join-class-banner"><div><strong>Join your college class</strong><p>Enter your professor’s class code to unlock personalized lessons. Demo: <b>FIN101</b>.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}>Join class <ArrowRight size={15}/></button></div>}
+          {activePage === "Overview" && classes.length > 0 && <ClassUpdates userId={activeAccount.id} classes={classes} onOpen={(cls) => { setOpenClass(cls); setActivePage("Finance classroom"); }} />}
+          {activePage === "Overview" && classes.length === 0 && <div className="join-class-banner"><div><strong>Join your college class</strong><p>Enter your professor’s class code to unlock personalized lessons and assignments.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}>Join class <ArrowRight size={15}/></button></div>}
           {activePage === "Overview" && (
             <Overview
             studentName={activeAccount.name}
@@ -655,8 +588,8 @@ export default function Home() {
               onGo={setActivePage}
             />
           )}
-          {activePage === "My courses" && <div className="join-class-banner"><div><strong>Taking a college course?</strong><p>Join your professor’s class using a class code. For the demo, use <b>FIN101</b>.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}><Plus size={15}/> Join a class</button></div>}
-          {activePage === "My courses" && <CoursesPage courses={courses} completed={completed} onAdd={() => setJoinDialog(true)} onOpen={(courseId) => { const course = courses.find((item) => item.id === courseId); setSelectedCourseId(courseId); setActivePage(course?.code === FINANCE_CODE ? "Finance classroom" : "Course details"); }} />}
+          {activePage === "My courses" && <div className="join-class-banner"><div><strong>Taking a college course?</strong><p>Join your professor’s class using the class code they share with you.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}><Plus size={15}/> Join a class</button></div>}
+          {activePage === "My courses" && <CoursesPage courses={courses} completed={completed} onAdd={() => setJoinDialog(true)} onOpen={(courseId) => { const course = courses.find((item) => item.id === courseId); setSelectedCourseId(courseId); if (!(course && openJoinedClass(course.code))) setActivePage("Course details"); }} />}
           {activePage === "Course details" && (
             <CourseDetailPage
               course={courses.find((course) => course.id === selectedCourseId)}
@@ -667,14 +600,14 @@ export default function Home() {
               onTutor={() => setActivePage("Study guides")}
             />
           )}
-          {activePage === "Finance classroom" && studentProfile && activeAccount && <FinanceClass profile={studentProfile} accountId={activeAccount.id} onBack={() => setActivePage("My courses")} />}
+          {activePage === "Finance classroom" && studentProfile && activeAccount && openClass && <FinanceClass key={openClass.id} cls={openClass} profile={studentProfile} userId={activeAccount.id} onBack={() => setActivePage("My courses")} />}
           {activePage === "Study planner" && <PlannerPage courses={courses} completed={completed} />}
           {activePage === "Study guides" && <TutorPage courses={studyReadyCourses} completed={completed} onComplete={markLessonComplete} onAddCourse={() => { if (courses[0]) { setSelectedCourseId(courses[0].id); setActivePage("Course details"); } else setCourseDialog(true); }} />}
           {activePage === "My progress" && <ProgressPage courses={courses} completed={completed} />}
         </div>
       </section>
 
-      {joinDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setJoinDialog(false); }}><section className="finance-join-modal" role="dialog" aria-modal="true" aria-label="Join a class"><button className="finance-close" onClick={() => setJoinDialog(false)} aria-label="Close"><X size={20}/></button><GraduationCap size={28}/><h2>Join your professor's class</h2><p>Enter the class code shared by your instructor. This demo includes a sample Introduction to Finance course.</p><form onSubmit={joinClass}><label htmlFor="finance-code">Class code</label><input id="finance-code" autoFocus value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError("");}} placeholder="FIN101" required /><small>Try demo code: <strong>FIN101</strong></small>{joinError && <p className="inline-error" role="alert">{joinError}</p>}<button className="primary-button" type="submit">Join class <ArrowRight size={15}/></button></form></section></div>}
+      {joinDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setJoinDialog(false); }}><section className="finance-join-modal" role="dialog" aria-modal="true" aria-label="Join a class"><button className="finance-close" onClick={() => setJoinDialog(false)} aria-label="Close"><X size={20}/></button><GraduationCap size={28}/><h2>Join your professor's class</h2><p>Enter the class code shared by your instructor.</p><form onSubmit={joinClass}><label htmlFor="finance-code">Class code</label><input id="finance-code" autoFocus value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError("");}} placeholder="FIN101" required /><small>Demo class code: <strong>FIN101</strong></small>{joinError && <p className="inline-error" role="alert">{joinError}</p>}<button className="primary-button" type="submit">Join class <ArrowRight size={15}/></button></form></section></div>}
       {courseDialog && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCourseDialog(false); }}>
           <section className="course-modal" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">

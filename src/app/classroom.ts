@@ -1,79 +1,15 @@
-// Shared record of what a student does in FIN101, written by the student app
-// and read by the professor portal. Demo storage: this browser only.
+// Helpers shared by the student classroom and the professor portal. Learning data
+// itself lives in the database (see cloud.ts).
 
 export const storageChangeEvent = "study-spark-storage-change";
 
-export type LessonSession = { lessonId: string; startedAt: string; seconds: number };
-export type Attempt = { lessonId: string; question: number; chosen: number; correct: boolean; hinted: boolean; at: string };
-export type Reflection = { lessonId: string; text: string; at: string };
-export type Activity = { sessions: LessonSession[]; attempts: Attempt[]; reflections: Reflection[]; lastActiveAt: string | null };
-export type Diagnostic = { results: Record<string, boolean>; takenAt: string };
-
-const emptyActivity = (): Activity => ({ sessions: [], attempts: [], reflections: [], lastActiveAt: null });
-export const activityKey = (accountId: string) => `study-spark-activity:${accountId}`;
-export const diagnosticKey = (accountId: string) => `study-spark-diagnostic:${accountId}`;
-
-export function readActivity(accountId: string): Activity {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(activityKey(accountId)) || "null") as Partial<Activity> | null;
-    if (!parsed) return emptyActivity();
-    return {
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
-      reflections: Array.isArray(parsed.reflections) ? parsed.reflections : [],
-      lastActiveAt: typeof parsed.lastActiveAt === "string" ? parsed.lastActiveAt : null,
-    };
-  } catch {
-    return emptyActivity();
-  }
-}
-
-function updateActivity(accountId: string, change: (activity: Activity) => Activity) {
-  try {
-    const next = change(readActivity(accountId));
-    next.lastActiveAt = new Date().toISOString();
-    window.localStorage.setItem(activityKey(accountId), JSON.stringify(next));
-    window.dispatchEvent(new Event(storageChangeEvent));
-  } catch { /* demo storage unavailable */ }
-}
-
-export function recordSession(accountId: string, lessonId: string, startedAt: Date, seconds: number) {
-  if (seconds < 15) return;
-  updateActivity(accountId, (activity) => ({ ...activity, sessions: [...activity.sessions, { lessonId, startedAt: startedAt.toISOString(), seconds: Math.round(seconds) }] }));
-}
-
-export function recordAttempts(accountId: string, attempts: Omit<Attempt, "at">[]) {
-  const at = new Date().toISOString();
-  updateActivity(accountId, (activity) => ({ ...activity, attempts: [...activity.attempts, ...attempts.map((attempt) => ({ ...attempt, at }))] }));
-}
-
-export function recordReflection(accountId: string, lessonId: string, text: string) {
-  updateActivity(accountId, (activity) => ({ ...activity, reflections: [...activity.reflections.filter((item) => item.lessonId !== lessonId), { lessonId, text, at: new Date().toISOString() }] }));
-}
-
-export function readDiagnostic(accountId: string): Diagnostic | null {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(diagnosticKey(accountId)) || "null") as Diagnostic | null;
-    return parsed && typeof parsed.results === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveDiagnostic(accountId: string, results: Record<string, boolean>) {
-  const diagnostic: Diagnostic = { results, takenAt: new Date().toISOString() };
-  try {
-    window.localStorage.setItem(diagnosticKey(accountId), JSON.stringify(diagnostic));
-    updateActivity(accountId, (activity) => activity);
-  } catch { /* demo storage unavailable */ }
-  return diagnostic;
-}
+type Session = { started_at: string; seconds: number };
 
 // Minutes per week for the last four weeks, oldest first; the last entry is the past 7 days.
-export function weeklyMinutes(activity: Activity, now = new Date()) {
+export function weeklyMinutes(sessions: Session[], now = new Date()) {
   const buckets = [0, 0, 0, 0];
-  for (const session of activity.sessions) {
-    const daysAgo = (now.getTime() - new Date(session.startedAt).getTime()) / 86_400_000;
+  for (const session of sessions) {
+    const daysAgo = (now.getTime() - new Date(session.started_at).getTime()) / 86_400_000;
     const week = Math.floor(daysAgo / 7);
     if (week >= 0 && week < 4) buckets[3 - week] += session.seconds / 60;
   }
@@ -81,13 +17,19 @@ export function weeklyMinutes(activity: Activity, now = new Date()) {
 }
 
 // Consecutive days, ending today or yesterday, with at least one study session.
-export function studyStreak(activity: Activity, now = new Date()) {
-  const days = new Set(activity.sessions.map((session) => new Date(session.startedAt).toDateString()));
+export function studyStreak(sessions: Session[], now = new Date()) {
+  const days = new Set(sessions.map((session) => new Date(session.started_at).toDateString()));
   const cursor = new Date(now);
   if (!days.has(cursor.toDateString())) cursor.setDate(cursor.getDate() - 1);
   let streak = 0;
   while (days.has(cursor.toDateString())) { streak += 1; cursor.setDate(cursor.getDate() - 1); }
   return streak;
+}
+
+// Most recent of any timestamps, for "last active".
+export function latest(...dates: (string | null | undefined)[]) {
+  const valid = dates.filter((date): date is string => Boolean(date));
+  return valid.length ? valid.reduce((a, b) => (a > b ? a : b)) : null;
 }
 
 export function daysSince(iso: string | null, now = new Date()) {
