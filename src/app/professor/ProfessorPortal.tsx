@@ -17,8 +17,10 @@ import {
   GraduationCap,
   LayoutDashboard,
   Lock,
+  Lightbulb,
   Mail,
   Menu,
+  Send,
   Moon,
   Plus,
   RotateCcw,
@@ -50,6 +52,7 @@ import {
   nudgeEmail,
   professorSessionKey,
   progressCsv,
+  questionMissRate,
   readEnrolledStudents,
   readProfessorData,
   resetProfessorData,
@@ -59,6 +62,7 @@ import {
   weeklySummary,
   type Assignment,
   type AssignmentType,
+  type ClassMessage,
   type ObjectiveRecord,
   type ProfessorData,
   type Student,
@@ -98,7 +102,8 @@ export default function ProfessorPortal() {
   const [openStudent, setOpenStudent] = useState<string | null>(null);
   const [saveError, setSaveError] = useState("");
 
-  const refreshStudents = useCallback(() => setEnrolled(readEnrolledStudents()), []);
+  // Reload when students act in another tab (lessons, read receipts, work marked done), so nothing is overwritten.
+  const refreshStudents = useCallback(() => { setEnrolled(readEnrolledStudents()); setData(readProfessorData()); }, []);
 
   useEffect(() => {
     setData(readProfessorData());
@@ -374,7 +379,7 @@ function StudentsView({ students, assignments, data, enrolledCount, onToggleSamp
         </tbody>
       </table>
     </div> : <p className={s.empty}>No students match this search.</p>}
-    <p className={s.footnote}>Study time is not recorded by the student app yet, so real students show &ldquo;Not tracked.&rdquo; Sample students show example times.</p>
+    <p className={s.footnote}>Study time comes from time spent in lessons in the student app. Sample students show example data.</p>
   </>;
 }
 
@@ -558,7 +563,7 @@ function StudentDrawer({ professorName, student, assignments, data, onChange, on
           ? <div className={s.weekBars} role="img" aria-label={`Minutes studied per week: ${student.weeklyMinutes.join(", ")}`}>
             {student.weeklyMinutes.map((minutes, index) => <div key={index} className={`${s.weekBar} ${index === 3 ? s.weekBarCurrent : ""}`}><b>{minutes}m</b><span style={{ height: `${Math.round(minutes / maxWeek * 80)}%` }} />{index === 3 ? "This wk" : `${3 - index} wk ago`}</div>)}
           </div>
-          : <p className={s.notice}><Clock3 size={16} /><span>Study time isn't recorded yet. Lesson timers in the student app would need to save their totals for this to appear.</span></p>}
+          : <p className={s.notice}><Clock3 size={16} /><span>No study time recorded yet.</span></p>}
       </section>
 
       <section className={s.drawerSection}>
@@ -585,6 +590,15 @@ function StudentDrawer({ professorName, student, assignments, data, onChange, on
           </div>;
         }) : <p className={s.empty}>No assignments for this student.</p>}
       </section>
+
+      <section className={s.drawerSection}>
+        <h3>Evidence of learning</h3>
+        {student.sample
+          ? <p className={s.empty}>Sample students don't have saved answers. Real students' check-in results, practice answers, hints and reflections appear here.</p>
+          : <EvidenceOfLearning student={student} />}
+      </section>
+
+      <MessagesSection student={student} professorName={professorName} data={data} onChange={onChange} />
 
       {!student.sample && <section className={s.drawerSection}>
         <h3>Other classes in Study Spark</h3>
@@ -709,10 +723,14 @@ function ObjectivesView({ students, assignments, data, onChange }: { students: S
           </div>
           {open && <div className={s.detailBox} style={{ marginTop: 10 }}>
             {bank.map((question, index) => <div className={s.question} key={index}>
-              <div className={s.objectiveRow}><strong>Q{index + 1}. {question.question}</strong>{data.showSamples && <span className={`${s.pill} ${question.sampleMissRate >= 50 ? s.pillRed : s.pillGray}`}>{question.sampleMissRate}% missed · sample</span>}</div>
+              <div className={s.objectiveRow}><strong>Q{index + 1}. {question.question}</strong>{(() => {
+                const real = questionMissRate(students, objective.id, index);
+                if (real) return <span className={`${s.pill} ${real.pct >= 50 ? s.pillRed : s.pillGray}`}>{real.missed} of {real.total} answers missed</span>;
+                return data.showSamples ? <span className={`${s.pill} ${question.sampleMissRate >= 50 ? s.pillRed : s.pillGray}`}>{question.sampleMissRate}% missed · sample</span> : <span className={`${s.pill} ${s.pillGray}`}>No answers yet</span>;
+              })()}</div>
               <p className={s.objectiveSub}>Answer: <b>{question.options[question.correct]}</b> · {question.why}</p>
             </div>)}
-            <p className={s.hint}>These are the same questions students answer in the lesson. The student app checks answers but doesn't save them, so miss rates are sample data.</p>
+            <p className={s.hint}>These are the same questions students answer in the lesson. Miss rates come from students' saved practice answers; sample rates show only until real answers come in.</p>
           </div>}
         </div>;
       })}
@@ -794,4 +812,68 @@ function AlertsView({ professorName, students, assignments, data, onOpenStudent 
       </section>
     </div>
   </>;
+}
+
+function EvidenceOfLearning({ student }: { student: Student }) {
+  const answered = student.attempts.length;
+  const correct = student.attempts.filter((attempt) => attempt.correct).length;
+  const hinted = student.attempts.filter((attempt) => attempt.hinted).length;
+  return <>
+    <div className={s.miniStats}>
+      <div><strong>{answered ? `${Math.round(correct / answered * 100)}%` : "—"}</strong><span>Practice accuracy ({answered} answers)</span></div>
+      <div><strong>{hinted}</strong><span>Hints used</span></div>
+      <div><strong>{student.reflections.length}</strong><span>Written reflections</span></div>
+    </div>
+    <div style={{ marginTop: 12 }}>
+      <strong style={{ fontSize: 13 }}>Check-in results</strong>
+      {student.diagnostic
+        ? <div className={s.chips}>{OBJECTIVES.map((objective) => {
+          const knew = student.diagnostic?.results[objective.id];
+          return <span key={objective.id} className={`${s.pill} ${knew ? s.pillGreen : s.pillAmber}`}>{knew ? <Check size={13} /> : <Target size={13} />}{objective.title}</span>;
+        })}</div>
+        : <p className={s.hint} style={{ marginTop: 4 }}>Hasn't taken the 2-minute check-in yet.</p>}
+    </div>
+    {OBJECTIVES.map((objective) => {
+      const tries = student.attempts.filter((attempt) => attempt.lessonId === objective.id);
+      const reflection = student.reflections.find((item) => item.lessonId === objective.id);
+      if (!tries.length && !reflection) return null;
+      const right = tries.filter((attempt) => attempt.correct).length;
+      return <div className={s.checkItem} key={objective.id}>
+        <span className={`${s.checkIcon} ${reflection ? s.checkIconDone : ""}`}>{reflection ? <Check size={15} /> : <Lightbulb size={14} />}</span>
+        <div>
+          <strong>{objective.title}</strong>
+          <small>{tries.length ? `${right}/${tries.length} practice answers correct · ${tries.filter((attempt) => attempt.hinted).length} with a hint` : "No practice answers yet"}</small>
+          {reflection && <p className={s.reflection}>&ldquo;{reflection.text}&rdquo;</p>}
+        </div>
+      </div>;
+    })}
+  </>;
+}
+
+function MessagesSection({ student, professorName, data, onChange }: { student: Student; professorName: string; data: ProfessorData; onChange: (next: ProfessorData) => void }) {
+  const [text, setText] = useState("");
+  const [sent, setSent] = useState("");
+  const thread = data.messages.filter((message) => message.studentKey === student.key).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!text.trim()) return;
+    const message: ClassMessage = { id: `m-${Date.now()}`, studentKey: student.key, from: professorName, text: text.trim(), sentAt: new Date().toISOString() };
+    onChange({ ...data, messages: [...data.messages, message] });
+    setText("");
+    setSent(student.sample ? "Saved. Sample students can't sign in, so it won't be read." : `Sent. ${student.name.split(" ")[0]} will see it on their class page.`);
+  }
+  return <section className={s.drawerSection}>
+    <h3>Message in Study Spark</h3>
+    <form className={s.form} onSubmit={send}>
+      <label className="sr-only" htmlFor="message-text">Message to {student.name}</label>
+      <textarea id="message-text" className={s.messageBox} rows={3} value={text} onChange={(event) => { setText(event.target.value); setSent(""); }} maxLength={600} placeholder={`Write to ${student.name.split(" ")[0]}. It appears at the top of their class page.`} />
+      <div className={s.formActions}><button type="submit" className={s.primary} disabled={!text.trim()}><Send size={14} /> Send</button></div>
+      {sent && <p className={s.hint} role="status">{sent}</p>}
+    </form>
+    {thread.map((message) => <div className={s.checkItem} key={message.id}>
+      <span className={`${s.checkIcon} ${message.readAt ? s.checkIconDone : ""}`}><Mail size={14} /></span>
+      <div><strong style={{ fontWeight: 400, whiteSpace: "pre-line" }}>{message.text}</strong><small>{new Date(message.sentAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></div>
+      <span className={`${s.pill} ${message.readAt ? s.pillGreen : s.pillGray}`}>{message.readAt ? "Read" : "Not read yet"}</span>
+    </div>)}
+  </section>;
 }

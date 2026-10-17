@@ -1,3 +1,5 @@
+import { daysSince, readActivity, storageChangeEvent, readDiagnostic, weeklyMinutes, type Attempt, type Diagnostic, type Reflection } from "../classroom";
+
 // Data for the professor portal. Student records are read from the same
 // browser storage keys the student app writes; nothing here writes to them.
 
@@ -25,9 +27,12 @@ export type Assignment = {
   createdAt: string;
 };
 
+export type ClassMessage = { id: string; studentKey: string; from: string; text: string; sentAt: string; readAt?: string };
+
 export type ProfessorData = {
   professors: ProfessorAccount[];
   objectives: ObjectiveRecord[];
+  messages: ClassMessage[];
   assignments: Assignment[];
   received: Record<string, string[]>;
   notes: Record<string, string>;
@@ -57,6 +62,9 @@ export type Student = {
   weeklyMinutes: number[] | null;
   profile: LearningProfile | null;
   otherCourses: OtherCourse[];
+  attempts: Attempt[];
+  reflections: Reflection[];
+  diagnostic: Diagnostic | null;
 };
 
 export type StudentStatus = "Mastered" | "On track" | "Needs attention" | "Not started";
@@ -127,6 +135,7 @@ function defaultData(): ProfessorData {
   return {
     professors: [{ id: "professor-demo", name: "Morgan Lee", email: DEMO_PROFESSOR.email, password: DEMO_PROFESSOR.password }],
     objectives: OBJECTIVES.map((objective) => ({ ...objective, studentLesson: true })),
+    messages: [],
     assignments: [
       lesson("a-interest", "fin-interest", "Lesson: Simple vs. compound interest", -3, 25),
       lesson("a-fv", "fin-fv", "Lesson: Future value", 1, 25),
@@ -152,6 +161,7 @@ export function readProfessorData(): ProfessorData {
     return {
       professors: Array.isArray(parsed.professors) && parsed.professors.length ? parsed.professors : base.professors,
       objectives: Array.isArray(parsed.objectives) && parsed.objectives.length ? parsed.objectives : base.objectives,
+      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       assignments: Array.isArray(parsed.assignments) ? parsed.assignments : base.assignments,
       received: parsed.received && typeof parsed.received === "object" ? parsed.received : {},
       notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
@@ -165,6 +175,7 @@ export function readProfessorData(): ProfessorData {
 export function saveProfessorData(data: ProfessorData) {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(data));
+    window.dispatchEvent(new Event(storageChangeEvent));
     return true;
   } catch {
     return false;
@@ -213,17 +224,21 @@ export function readEnrolledStudents(): Student[] {
       try {
         profile = JSON.parse(window.localStorage.getItem(`study-spark-onboarding:${id}`) || "null") as LearningProfile | null;
       } catch { /* demo storage */ }
+      const activity = readActivity(id);
       students.push({
         key: `account:${id}`,
         name: name || "Student",
         email: email || "",
         sample: false,
         joinedAt,
-        lastActiveDaysAgo: null,
+        lastActiveDaysAgo: daysSince(activity.lastActiveAt),
         mastered,
-        weeklyMinutes: null,
+        weeklyMinutes: weeklyMinutes(activity),
         profile,
         otherCourses,
+        attempts: activity.attempts,
+        reflections: activity.reflections,
+        diagnostic: readDiagnostic(id),
       });
     }
   } catch { /* demo storage */ }
@@ -235,17 +250,17 @@ const sampleProfile = (goal: string, confidence: string, explanationPreference: 
 
 export const SAMPLE_STUDENTS: Student[] = [
   { key: "sample:maya", name: "Maya Rodriguez", email: "maya.r@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv"], weeklyMinutes: [95, 110, 120, 85],
-    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), otherCourses: [] },
+    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
   { key: "sample:jordan", name: "Jordan Taylor", email: "jordan.t@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 1, mastered: ["fin-interest", "fin-fv"], weeklyMinutes: [60, 75, 70, 55],
-    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), otherCourses: [] },
+    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
   { key: "sample:sam", name: "Sam Kim", email: "sam.k@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 6, mastered: [], weeklyMinutes: [40, 15, 0, 0],
-    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), otherCourses: [] },
+    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
   { key: "sample:priya", name: "Priya Shah", email: "priya.s@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv", "fin-annuity"], weeklyMinutes: [80, 90, 105, 120],
-    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), otherCourses: [] },
+    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
   { key: "sample:alex", name: "Alex Nguyen", email: "alex.n@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 3, mastered: ["fin-fv"], weeklyMinutes: [35, 45, 30, 25],
-    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), otherCourses: [] },
+    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), otherCourses: [], attempts: [], reflections: [], diagnostic: null },
   { key: "sample:chris", name: "Chris Okafor", email: "chris.o@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: null, mastered: [], weeklyMinutes: [0, 0, 0, 0],
-    profile: null, otherCourses: [] },
+    profile: null, otherCourses: [], attempts: [], reflections: [], diagnostic: null },
 ];
 
 export function daysUntil(isoDate: string) {
@@ -293,7 +308,7 @@ export function formatMinutes(minutes: number | null) {
 }
 
 export function lastActiveLabel(student: Student) {
-  if (student.lastActiveDaysAgo === null) return student.sample ? "Never" : "This device";
+  if (student.lastActiveDaysAgo === null) return student.sample ? "Never" : "No activity yet";
   if (student.lastActiveDaysAgo === 0) return "Today";
   if (student.lastActiveDaysAgo === 1) return "Yesterday";
   return `${student.lastActiveDaysAgo} days ago`;
@@ -380,4 +395,27 @@ export function nudgeEmail(student: Student, professorName: string, reasons: str
     `Prof. ${professorName}`,
   ].join("\n");
   return `mailto:${student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export const studentKeyFor = (accountId: string) => `account:${accountId}`;
+
+// Lets a student mark non-lesson work (a reading, a reflection) as done; the professor sees it as received.
+export function markAssignmentDone(assignmentId: string, studentKey: string, done: boolean) {
+  const data = readProfessorData();
+  const list = data.received[assignmentId] ?? [];
+  const next = done ? Array.from(new Set([...list, studentKey])) : list.filter((key) => key !== studentKey);
+  saveProfessorData({ ...data, received: { ...data.received, [assignmentId]: next } });
+}
+
+export function markMessageRead(messageId: string) {
+  const data = readProfessorData();
+  saveProfessorData({ ...data, messages: data.messages.map((message) => message.id === messageId ? { ...message, readAt: message.readAt ?? new Date().toISOString() } : message) });
+}
+
+// Share of answers missed on one practice question by real students, from saved attempts.
+export function questionMissRate(students: Student[], lessonId: string, question: number) {
+  const answers = students.flatMap((student) => student.attempts.filter((attempt) => attempt.lessonId === lessonId && attempt.question === question));
+  if (!answers.length) return null;
+  const missed = answers.filter((attempt) => !attempt.correct).length;
+  return { missed, total: answers.length, pct: Math.round(missed / answers.length * 100) };
 }

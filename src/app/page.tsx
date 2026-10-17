@@ -2,6 +2,7 @@
 
 import StudentOnboarding, { type StudentProfile } from "./StudentOnboarding";
 import FinanceClass, { FINANCE_CODE, FINANCE_NAME } from "./FinanceClass";
+import ClassUpdates from "./ClassUpdates";
 
 import {
   ArrowRight,
@@ -335,6 +336,14 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState(scratchAccountEmail);
   const [authPassword, setAuthPassword] = useState(scratchAccountPassword);
   const saved = hasStoredData && !storageError;
+  const [financeMastered, setFinanceMastered] = useState<string[]>([]);
+  useEffect(() => {
+    if (!activeAccountId) return;
+    const read = () => { try { const stored: unknown = JSON.parse(window.localStorage.getItem(`study-spark-finance-completed:${activeAccountId}`) || "[]"); setFinanceMastered(Array.isArray(stored) ? stored.filter((item): item is string => typeof item === "string") : []); } catch { setFinanceMastered([]); } };
+    read();
+    window.addEventListener(demoStorageEvent, read);
+    return () => window.removeEventListener(demoStorageEvent, read);
+  }, [activeAccountId, activePage]);
   const studyReadyCourses = useMemo(() => getStudyReadyCourses(courses), [courses]);
 
   const setActiveAccountId = useCallback((nextId: string | null) => {
@@ -625,7 +634,8 @@ export default function Home() {
         </header>
 
         <div className="content">
-          {activePage === "Overview" && <div className="join-class-banner"><div><strong>Join your college class</strong><p>Enter your professor’s class code to unlock personalized lessons. Demo: <b>FIN101</b>.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}>Join class <ArrowRight size={15}/></button></div>}
+          {activePage === "Overview" && courses.some((course) => course.code === FINANCE_CODE) && <ClassUpdates accountId={activeAccount.id} mastered={financeMastered} onOpen={() => setActivePage("Finance classroom")} />}
+          {activePage === "Overview" && !courses.some((course) => course.code === FINANCE_CODE) && <div className="join-class-banner"><div><strong>Join your college class</strong><p>Enter your professor’s class code to unlock personalized lessons. Demo: <b>FIN101</b>.</p></div><button className="primary-button" onClick={() => setJoinDialog(true)}>Join class <ArrowRight size={15}/></button></div>}
           {activePage === "Overview" && (
             <Overview
             studentName={activeAccount.name}

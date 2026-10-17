@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Sparkles, Target } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Lightbulb, Sparkles, Target } from "lucide-react";
 import type { StudentProfile } from "./StudentOnboarding";
+import { PRACTICE_HINTS, recordAttempts, recordReflection, recordSession } from "./classroom";
 
 export type FinanceLessonData = { id:string; title:string; objective:string; short:string; explanation:string; steps:string[]; application:string; prompt:string; choices:string[]; answer:number; feedback:string };
 
@@ -36,14 +37,20 @@ const exercises: Record<string, {question:string; options:string[]; correct:numb
   ],
 };
 
-export default function FinanceLesson({lesson,profile,minutes,onBack,onMastered,alreadyMastered}:{lesson:FinanceLessonData;profile:StudentProfile;minutes:number;onBack:()=>void;onMastered:()=>void;alreadyMastered:boolean}) {
+export default function FinanceLesson({lesson,profile,accountId,minutes,onBack,onMastered,alreadyMastered}:{lesson:FinanceLessonData;profile:StudentProfile;accountId:string;minutes:number;onBack:()=>void;onMastered:()=>void;alreadyMastered:boolean}) {
   const [stage,setStage]=useState(0);
   const [answers,setAnswers]=useState<Record<number,number>>({});
   const [checked,setChecked]=useState(false);
   const [reflection,setReflection]=useState("");
   const [elapsed,setElapsed]=useState(0);
   const [done,setDone]=useState(false);
+  const [hinted,setHinted]=useState<Record<number,boolean>>({});
+  const elapsedRef=useRef(0);
   useEffect(()=>{const id=window.setInterval(()=>setElapsed(s=>s+1),1000);return()=>window.clearInterval(id);},[]);
+  useEffect(()=>{elapsedRef.current=elapsed;},[elapsed]);
+  // Save the time spent in this lesson when the student leaves it, so the professor sees real study time.
+  useEffect(()=>{const started=new Date();return()=>recordSession(accountId,lesson.id,started,elapsedRef.current);},[accountId,lesson.id]);
+  const hints=PRACTICE_HINTS[lesson.id]||[];
   const exampleFirst=profile.explanationPreference==="Step-by-step examples";
   const realFirst=profile.explanationPreference==="Real-world applications";
   const brief=profile.explanationPreference==="Short and simple explanations";
@@ -70,9 +77,9 @@ export default function FinanceLesson({lesson,profile,minutes,onBack,onMastered,
         <p className="finance-personal-tip">{profile.motivation?`Your reason for learning: ${profile.motivation}`:"Your learning goal: "+profile.goal}</p>
       </div>}
       {stage===1 && <div className="finance-learning-stack"><h3>{exampleFirst?"Follow along, one step at a time":"Guided worked example"}</h3><p>Use paper or a calculator. Try each step yourself before reading the next.</p>{lesson.steps.map((s,i)=><div className="finance-worked-step" key={s}><span>{i+1}</span><div><strong>Step {i+1}</strong><p>{s}</p></div></div>)}<div className="finance-full-callout"><strong>{realFirst?"Connect this to your own money":"Your turn"}</strong><p>{realFirst?lesson.application:"Change one number in the example and calculate what would happen. Explain why the result changed."}</p></div></div>}
-      {stage===2 && <div className="finance-learning-stack"><p>{games?"Challenge round! Earn mastery by getting at least 3 of 4 right.":flash?"Recall practice: answer from memory before checking your notes.":"Work through all four questions. You need at least three correct to demonstrate mastery."}</p>{practice.map((q,i)=><div className="finance-practice-card" key={i}><span className="eyebrow">QUESTION {i+1} OF {practice.length}</span><h3>{q.question}</h3><div className="finance-practice-options">{q.options.map((opt,j)=><button key={j} disabled={checked} className={answers[i]===j?"chosen":""} onClick={()=>setAnswers(prev=>({...prev,[i]:j}))}>{opt}</button>)}</div>{checked&&<div className={answers[i]===q.correct?"finance-answer-good":"finance-answer-wrong"}><strong>{answers[i]===q.correct?"Correct":"Review this one"}</strong><p>{q.why}</p></div>}</div>)}{!checked?<button className="primary-button" disabled={!allAnswered} onClick={()=>setChecked(true)}>Check my 4 answers <ArrowRight size={15}/></button>:<div className="finance-full-callout"><strong>Score: {correctCount} / {practice.length}</strong><p>{mastered?"Nice work. You can continue to the final application.":"Review the explanations and try again. Three correct answers are needed to continue."}</p>{!mastered&&<button className="secondary-button" onClick={()=>{setAnswers({});setChecked(false);}}>Retry practice</button>}</div>}</div>}
+      {stage===2 && <div className="finance-learning-stack"><p>{games?"Challenge round! Earn mastery by getting at least 3 of 4 right.":flash?"Recall practice: answer from memory before checking your notes.":"Work through all four questions. You need at least three correct to demonstrate mastery."}</p>{practice.map((q,i)=><div className="finance-practice-card" key={i}><span className="eyebrow">QUESTION {i+1} OF {practice.length}</span><h3>{q.question}</h3><div className="finance-practice-options">{q.options.map((opt,j)=><button key={j} disabled={checked} className={answers[i]===j?"chosen":""} onClick={()=>setAnswers(prev=>({...prev,[i]:j}))}>{opt}</button>)}</div>{!checked&&hints[i]&&(hinted[i]?<div className="finance-hint"><Lightbulb size={15}/><p>{hints[i]}</p></div>:<button type="button" className="finance-hint-button" onClick={()=>setHinted(prev=>({...prev,[i]:true}))}><Lightbulb size={14}/> Show a hint</button>)}{checked&&<div className={answers[i]===q.correct?"finance-answer-good":"finance-answer-wrong"}><strong>{answers[i]===q.correct?"Correct":"Review this one"}</strong><p>{q.why}</p></div>}</div>)}{!checked?<button className="primary-button" disabled={!allAnswered} onClick={()=>{setChecked(true);recordAttempts(accountId,practice.map((q,i)=>({lessonId:lesson.id,question:i,chosen:answers[i],correct:answers[i]===q.correct,hinted:Boolean(hinted[i])})));}}>Check my 4 answers <ArrowRight size={15}/></button>:<div className="finance-full-callout"><strong>Score: {correctCount} / {practice.length}</strong><p>{mastered?"Nice work. You can continue to the final application.":"Review the explanations and try again. Three correct answers are needed to continue."}</p>{!mastered&&<button className="secondary-button" onClick={()=>{setAnswers({});setChecked(false);setHinted({});}}>Retry practice</button>}</div>}</div>}
       {stage===3 && <div className="finance-learning-stack"><h3>{realFirst?"A decision you could make":"Explain it in your own words"}</h3><p>{lesson.application}</p><label htmlFor="finance-reflection"><strong>How would you explain this topic to a classmate, and when would you use it?</strong></label><textarea id="finance-reflection" rows={5} value={reflection} onChange={e=>setReflection(e.target.value)} placeholder="Write at least a couple of sentences explaining the idea and a real example..."/><div className="finance-full-callout"><strong>Quick self-check</strong><p>Can you explain the concept without notes? Can you solve a new example? Can you recognize when the idea applies?</p></div>{done&&<div className="finance-answer-good"><strong>Lesson mastered!</strong><p>You completed the practice check and reflection. Actual study time: {Math.max(1,Math.ceil(elapsed/60))} minute(s).</p></div>}</div>}
-      <div className="finance-full-actions"><button className="secondary-button" disabled={stage===0} onClick={()=>setStage(s=>Math.max(0,s-1))}>Previous section</button>{stage<3?<button className="primary-button" disabled={stage===2&&(!checked||!mastered)} onClick={()=>setStage(s=>Math.min(3,s+1))}>Continue <ArrowRight size={15}/></button>:<button className="primary-button" disabled={reflection.trim().length<30||done} onClick={()=>{setDone(true);if(!alreadyMastered)onMastered();}}>{done?"Completed":"Complete lesson"} <CheckCircle2 size={15}/></button>}</div>
-    </article><p className="finance-disclaimer">Estimated session lengths are learning targets, not guaranteed durations. This demo uses structured content and onboarding preferences; it does not yet generate AI lessons or diagnose individual ability.</p>
+      <div className="finance-full-actions"><button className="secondary-button" disabled={stage===0} onClick={()=>setStage(s=>Math.max(0,s-1))}>Previous section</button>{stage<3?<button className="primary-button" disabled={stage===2&&(!checked||!mastered)} onClick={()=>setStage(s=>Math.min(3,s+1))}>Continue <ArrowRight size={15}/></button>:<button className="primary-button" disabled={reflection.trim().length<30||done} onClick={()=>{setDone(true);recordReflection(accountId,lesson.id,reflection.trim());if(!alreadyMastered)onMastered();}}>{done?"Completed":"Complete lesson"} <CheckCircle2 size={15}/></button>}</div>
+    </article><p className="finance-disclaimer">Estimated session lengths are learning targets, not guaranteed durations. Your study time, practice answers, hints used and reflection are saved so your professor can see your progress. This demo uses structured content and onboarding preferences; it does not yet generate AI lessons.</p>
   </section>;
 }

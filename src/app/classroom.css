@@ -1,0 +1,49 @@
+/* FIN101 classroom additions: professor assignments, messages, study habit, check-in, hints. */
+.cls-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+.cls-card { padding: 18px; border: 1px solid #e9e4f0; border-radius: 14px; background: #fff; }
+.cls-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.cls-card-head h2 { margin: 5px 0 0; font-size: 17px; letter-spacing: -.4px; }
+.cls-count { display: grid; min-width: 26px; height: 26px; padding: 0 8px; place-items: center; border-radius: 13px; background: #f1edff; color: #5940bc; font-size: 11px; font-weight: 700; }
+.cls-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-top: 1px solid #f0eef4; }
+.cls-item:first-of-type { border-top: 0; }
+.cls-item > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.cls-item strong { font-size: 12px; }
+.cls-item small { color: #8a8698; font-size: 11px; }
+.cls-item p { margin: 3px 0 0; color: #6b6779; font-size: 11px; line-height: 1.5; }
+.cls-late { color: #b4432f !important; font-weight: 600; }
+.cls-check { display: grid; flex: 0 0 26px; width: 26px; height: 26px; place-items: center; border-radius: 8px; background: #f3f1f8; color: #8a8698; }
+.cls-check.done { background: #eaf7f2; color: #2f8f6f; }
+.cls-check.late { background: #fdeeea; color: #b4432f; }
+.cls-empty { margin: 0; padding: 14px; border: 1px dashed #e3dfeb; border-radius: 10px; color: #8a8698; font-size: 12px; text-align: center; }
+.cls-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cls-stats > div { display: grid; gap: 3px; padding: 12px; border-radius: 10px; background: #faf9fd; color: #7054d8; }
+.cls-stats strong { color: #27233b; font: 700 19px Manrope, sans-serif; }
+.cls-stats span { color: #8a8698; font-size: 11px; }
+.cls-goal { margin-top: 12px; }
+.cls-goal-row { display: flex; justify-content: space-between; margin-bottom: 6px; color: #6b6779; font-size: 11px; }
+.cls-note { margin: 10px 0 0; color: #7c7689; font-size: 12px; line-height: 1.5; }
+.cls-messages { display: grid; gap: 10px; margin: 16px 0 0; }
+.cls-message { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid #e3dafb; border-radius: 12px; background: #f6f2ff; color: #5940bc; }
+.cls-message > div { flex: 1; min-width: 0; }
+.cls-message strong { display: block; color: #3e2f86; font-size: 12px; }
+.cls-message p { margin: 4px 0; color: #4a4560; font-size: 12px; line-height: 1.55; white-space: pre-line; }
+.cls-message small { color: #8a8698; font-size: 10px; }
+.cls-diagnostic-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin: 16px 0; padding: 18px; border: 1px solid #f1e3c4; border-radius: 14px; background: linear-gradient(120deg, #fff8e9, #fff); }
+.cls-diagnostic-cta strong { font-size: 14px; }
+.cls-diagnostic-cta p { margin: 4px 0 0; color: #7a6a45; font-size: 12px; }
+.cls-check-in { margin: 16px 0; }
+.cls-question { margin: 0; padding: 14px 0; border: 0; border-top: 1px solid #f0eef4; }
+.cls-question legend { margin-bottom: 10px; padding: 0; font-weight: 600; font-size: 13px; }
+.cls-badge { display: inline-block; margin: 0 0 4px 8px; padding: 3px 7px; border-radius: 5px; font-size: 9px; font-weight: 700; letter-spacing: .03em; }
+.cls-badge.focus { background: #fff1e4; color: #a24f16; }
+.cls-badge.review { background: #eaf7f2; color: #2f8f6f; }
+.finance-hint-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 10px; border: 1px solid #efe2bf; border-radius: 7px; background: #fffaf0; color: #8a6a1c; font-size: 11px; font-weight: 600; cursor: pointer; }
+.finance-hint { display: flex; gap: 8px; margin-top: 10px; padding: 11px 12px; border-radius: 9px; background: #fffaf0; color: #7a5d17; font-size: 12px; line-height: 1.55; }
+.finance-hint svg { flex: 0 0 auto; margin-top: 2px; }
+.dark-mode .cls-card, .dark-mode .cls-diagnostic-cta { background: #292635; border-color: #464052; color: var(--ink); }
+.dark-mode .cls-stats > div { background: #302a43; }
+.dark-mode .cls-stats strong, .dark-mode .cls-message strong { color: var(--ink); }
+.dark-mode .cls-message { background: #302a43; border-color: #50476b; }
+.dark-mode .cls-message p, .dark-mode .cls-item p { color: #c9c4d6; }
+.dark-mode .cls-item, .dark-mode .cls-question { border-color: #3a3648; }
+@media (max-width: 800px) { .cls-row { grid-template-columns: 1fr; } }

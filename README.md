@@ -41,3 +41,13 @@ This is a **simulated institutional workflow**, not a real Canvas integration: t
 Join `FIN101`, then select **Start lesson**. Each lesson now opens a dedicated full-page learning workspace with four sections: concept explanation, guided example, four-question practice, and written application/reflection. The layout and practice language respond to the student's saved onboarding preferences. The study-time target is apportioned across sections, and an elapsed timer is shown; this is an **estimate, not a forced minimum**. Students must answer at least three of four practice questions correctly and submit a 30-character reflection to mark the lesson mastered. Completion is stored locally per demo account.
 
 This is structured, rules-based sample content, not AI-generated instruction, live instructor content, or a validated guarantee that every learner spends the target minutes. No real student records should be used in this demo.
+
+## v1.2: connected student and professor views (branch `main-v1.2`)
+
+Open `/professor` (demo login: `professor@scratch.test` / `teach123`) alongside the student app. Both read the same browser storage, so actions show up on the other side right away, even across tabs.
+
+- **Students:** a 2-minute check-in reorders the FIN101 lesson plan (missed topics first, known topics marked as quick reviews). Lessons save study time, every practice answer, hints used and the written reflection. The class page lists professor assignments (lessons complete on mastery; readings can be marked done), shows messages from the professor, and tracks a weekly study goal and streak. The Overview shows a class update banner once a student has joined.
+- **Professors:** see real study time, last activity, check-in results, practice accuracy, hints and reflections per student; real per-question miss rates in the question bank; send messages students see in the app and get read receipts.
+- Shared data lives in `src/app/classroom.ts` (student activity) and `src/app/professor/data.ts` (assignments, messages).
+
+Still to do: Supabase (so data syncs across devices and real accounts work) and live AI explanations, which need the team's Supabase and AI API keys.

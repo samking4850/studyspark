@@ -266,3 +266,5 @@
 .summaryBox { width: 100%; min-height: 320px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); color: var(--ink); font: 13px/1.6 "DM Sans", sans-serif; resize: vertical; }
 .drawerActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
 a.secondary, a.primary { text-decoration: none; }
+.reflection { margin: 6px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--canvas); color: var(--ink); font-size: 13px; font-style: italic; line-height: 1.5; }
+.messageBox { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); line-height: 1.5; resize: vertical; }
