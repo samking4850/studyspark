@@ -1,5 +1,7 @@
 "use client";
 
+import JudgeDemo from "./JudgeDemo";
+import StudyNight from "./StudyNight";
 import StudentOnboarding, { type StudentProfile } from "./StudentOnboarding";
 import FinanceClass, { FINANCE_CODE, FINANCE_NAME } from "./FinanceClass";
 
@@ -74,7 +76,7 @@ type ExtractedDocument = {
   suggestedTopics: Array<{ name: string; page: number; excerpt: string }>;
 };
 
-type Page = "Overview" | "My courses" | "Course details" | "Study planner" | "Study guides" | "My progress" | "Finance classroom";
+type Page = "Study Night" | "Overview" | "My courses" | "Course details" | "Study planner" | "Study guides" | "My progress" | "Finance classroom";
 
 type DemoData = { courses: Course[]; completed: string[] };
 type AccountRecord = {
@@ -208,6 +210,7 @@ const navItems: { title: Page; icon: typeof GraduationCap }[] = [
   { title: "Study planner", icon: CalendarDays },
   { title: "Study guides", icon: Headphones },
   { title: "My progress", icon: Target },
+  { title: "Study Night", icon: Sparkles },
 ];
 
 type StudySession = {
@@ -285,6 +288,7 @@ function buildStudyPlan(courses: Course[], completed: string[]) {
 export default function Home() {
   const { accounts, persist: persistAccounts, hydrate: hydrateAccounts } = useStoredAccounts();
   const [activeAccountId, setActiveAccountIdState] = useState<string | null>(null);
+  const [judgeDemo,setJudgeDemo]=useState(false);
   const [mounted, setMounted] = useState(false);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -407,6 +411,8 @@ export default function Home() {
     );
   }
 
+  if(judgeDemo)return <JudgeDemo onExit={()=>{setJudgeDemo(false);window.scrollTo({top:0});}}/>;
+
   if (!activeAccount) {
     return (
       <main className="auth-shell">
@@ -421,10 +427,11 @@ export default function Home() {
 
           <div className="auth-columns">
             <section className="auth-intro">
-              <div className="auth-kicker"><Sparkles size={14} /> YOUR STUDY SIDEKICK</div>
+              <div className="auth-kicker"><Sparkles size={14} /> YOUR NEXT STEP, MADE CLEAR</div>
               <h1>Turn class materials into a study plan that <span>fits your life.</span></h1>
-              <p className="auth-lede">Organize your classes, bring your course notes, and keep your next lesson and exam dates in one clear place.</p>
+              <p className="auth-lede">Stop wondering where to start. Turn your course material into focused practice, a realistic plan, and momentum you can share with friends.</p>
 
+              <div className="judge-entry"><span className="eyebrow">STARTUP 48 · SEE THE SOLUTION</span><button className="primary-button" onClick={()=>{setJudgeDemo(true);window.scrollTo({top:0});}}>Experience the demo <ArrowRight size={16}/></button><small>Follow one student from overwhelmed to ready. No signup required.</small></div>
               <div className="how-to-use">
                 <h2>How Study Spark works</h2>
                 <article className="how-step"><span>1</span><div><strong>Add your classes</strong><p>Set the class name, exam date, and realistic daily study time.</p></div></article>
@@ -652,6 +659,7 @@ export default function Home() {
           {activePage === "Finance classroom" && studentProfile && activeAccount && <FinanceClass profile={studentProfile} accountId={activeAccount.id} onBack={() => setActivePage("My courses")} />}
           {activePage === "Study planner" && <PlannerPage courses={courses} completed={completed} />}
           {activePage === "Study guides" && <TutorPage courses={studyReadyCourses} completed={completed} onComplete={markLessonComplete} onAddCourse={() => { if (courses[0]) { setSelectedCourseId(courses[0].id); setActivePage("Course details"); } else setCourseDialog(true); }} />}
+          {activePage === "Study Night" && <StudyNight key={activeAccount.id} name={activeAccount.name} accountId={activeAccount.id}/>}
           {activePage === "My progress" && <ProgressPage courses={courses} completed={completed} />}
         </div>
       </section>

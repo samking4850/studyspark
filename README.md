@@ -38,6 +38,18 @@ This is a **simulated institutional workflow**, not a real Canvas integration: t
 
 ### Expanded finance lessons (Startup 48 demo)
 
-Join `FIN101`, then select **Start lesson**. Each lesson now opens a dedicated full-page learning workspace with four sections: concept explanation, guided example, four-question practice, and written application/reflection. The layout and practice language respond to the student's saved onboarding preferences. The study-time target is apportioned across sections, and an elapsed timer is shown; this is an **estimate, not a forced minimum**. Students must answer at least three of four practice questions correctly and submit a 30-character reflection to mark the lesson mastered. Completion is stored locally per demo account.
+Join `FIN101`, then select **Start lesson**. Each lesson now opens a dedicated full-page learning workspace with four sections: concept explanation, guided example, four- or six-question practice, and written application/reflection. The layout and practice language respond to the student's saved onboarding preferences. The study-time target is apportioned across sections, and an elapsed timer is shown; this is an **estimate, not a forced minimum**. Students must answer at least 75% of practice questions correctly (rounded up) and submit a 30-character reflection to mark the lesson mastered. Completion is stored locally per demo account.
 
 This is structured, rules-based sample content, not AI-generated instruction, live instructor content, or a validated guarantee that every learner spends the target minutes. No real student records should be used in this demo.
+
+## Judge demo and Study Night
+
+Select **Experience the demo** on the sign-in page. No account is needed. Five chapters follow Jamie from overwhelm through a personalized plan, a working finance lesson, a group-game preview, and the roadmap. The group preview explicitly uses simulated friends and runs entirely on one screen. The lesson's demo-only progress is stored under the `judge-demo` account key, separate from personal workspaces.
+
+`/study-night` is the public multiplayer entry point. It supports room codes and invite links, individual or alternating Purple/Gold teams, 30-second questions, host-controlled reveals, leaderboards, and personal missed-question review. Hosts can use an eight-question shuffled FIN101 sample deck or write 3–12 questions with four distinct choices, explanations, and optional source references. This does not generate quizzes from PDFs or use AI. Rooms support 12 players and expire four hours after creation; closing the page does not remove a player from the room. Hosts should keep their session open or return in the same tab.
+
+Live rooms require an Upstash Redis REST database connected through Vercel. Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (the Vercel integration's `KV_REST_API_URL` / `KV_REST_API_TOKEN` names are also supported). These are server-only secrets and must never be committed. Without configuration, shared-room controls stay disabled while solo warm-up and the judge preview remain playable. Database provisioning requires the owner's provider agreement; use the free plan with automatic paid upgrades disabled. Do not use temporary in-memory storage for production rooms.
+
+Room sessions use per-player random bearer tokens in browser session storage. The API hides answer keys until reveal, validates host actions and question indices, rejects duplicate/late answers, and uses atomic Redis compare-and-set updates so simultaneous submissions are preserved. Creation/join attempts are limited per IP. Rooms store nicknames and quiz content, not school account credentials or uploaded PDFs. This is an early prototype, not institutional authentication.
+
+Run game-domain regression tests with Node.js 24: `node --experimental-strip-types --test tests/study-night.test.mjs`.
