@@ -19,7 +19,8 @@ export type AssignmentRow = { id: string; class_id: string; title: string; type:
 export type SessionRow = { student_id: string; lesson_key: string; started_at: string; seconds: number };
 export type AttemptRow = { student_id: string; lesson_key: string; question: number; chosen: number; correct: boolean; hinted: boolean; at: string };
 export type ReflectionRow = { student_id: string; lesson_key: string; text: string; at: string };
-export type DiagnosticRow = { student_id: string; results: Record<string, boolean>; taken_at: string };
+// results holds the starting-point check: { scores: { [objective]: 0 | 1 | 2 }, completedAt } (see lib/learning-plan).
+export type DiagnosticRow = { student_id: string; results: Record<string, unknown>; taken_at: string };
 export type MessageRow = { id: string; class_id: string; student_id: string; professor_id: string; text: string; sent_at: string; read_at: string | null };
 export type MasteryRow = { student_id: string; objective_key: string; mastered_at: string };
 export type CompletionRow = { assignment_id: string; student_id: string };
@@ -161,7 +162,7 @@ export async function saveMastery(classId: string, userId: string, objectiveKey:
   await supabase.from("lesson_mastery").upsert({ class_id: classId, student_id: userId, objective_key: objectiveKey }, { onConflict: "class_id,student_id,objective_key", ignoreDuplicates: true });
 }
 
-export async function saveDiagnostic(classId: string, userId: string, results: Record<string, boolean>) {
+export async function saveDiagnostic(classId: string, userId: string, results: unknown) {
   await supabase.from("diagnostics").upsert({ class_id: classId, student_id: userId, results, taken_at: new Date().toISOString() });
 }
 

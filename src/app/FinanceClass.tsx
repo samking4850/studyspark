@@ -4,11 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, CheckCircle2, Clock3, Flame, GraduationCap, Mail, Sparkles, Target } from "lucide-react";
 import type { StudentProfile } from "./StudentOnboarding";
 import FinanceLesson from "./FinanceLesson";
-import { DIAGNOSTIC_QUESTIONS, studyStreak, weeklyMinutes } from "./classroom";
+import DiagnosticQuiz from "./DiagnosticQuiz";
+import StudyAssistant from "./StudyAssistant";
+import { buildLearningPlan, parseDiagnostic } from "../lib/learning-plan";
+import { studyStreak, weeklyMinutes } from "./classroom";
 import { loadStudentClass, markMessageRead, saveDiagnostic, saveMastery, setCompletion, type ClassInfo, type StudentClassData } from "./cloud";
 import { daysUntil, formatDue } from "./professor/data";
 import "./classroom.css";
 
+// A signed-in student's view of one class. Lessons follow the sample FIN101 design in
+// DemoFinanceClass; progress, assignments and messages come from the shared database.
 type Lesson = { id: string; title: string; objective: string; short: string; explanation: string; steps: string[]; application: string; prompt: string; choices: string[]; answer: number; feedback: string };
 const lessons: Lesson[] = [
   { id:"fin-interest", title:"Simple vs. compound interest", objective:"Explain how interest accumulates over time", short:"Understand why money grows faster when interest earns interest.", explanation:"Simple interest is calculated on the original principal. Compound interest is calculated on the principal plus previously earned interest.", steps:["Start with a $1,000 balance and a 10% annual interest rate.","After one year, the balance is $1,100.","With compound interest, year two earns 10% of $1,100, so the balance becomes $1,210."], application:"If you save for a car, compound interest means your savings can grow faster the longer you leave them invested.", prompt:"You invest $1,000 at 10% compounded annually. What is the balance after 2 years?", choices:["$1,100", "$1,200", "$1,210", "$1,300"], answer:2, feedback:"Year 1: $1,000 × 1.10 = $1,100. Year 2: $1,100 × 1.10 = $1,210." },
@@ -22,7 +27,9 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
   const [classData, setClassData] = useState<StudentClassData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [active, setActive] = useState<string | null>(null);
-  const [takingCheck, setTakingCheck] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [planNotice, setPlanNotice] = useState("");
+  const [started, setStarted] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -39,20 +46,21 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
     return () => { window.removeEventListener("focus", onFocus); window.clearInterval(timer); };
   }, [refresh]);
 
+  // Lessons with saved in-progress work on this device show "Resume".
+  useEffect(() => {
+    try { setStarted(lessons.filter((lesson) => window.localStorage.getItem(`study-spark-lesson-v1:${userId}:${lesson.id}`) !== null).map((lesson) => lesson.id)); } catch { /* storage can be unavailable */ }
+  }, [userId, active]);
+
   const hasLessons = cls.template === "finance-tvm";
   const completed = useMemo(() => (classData?.mastery ?? []).map((row) => row.objective_key), [classData]);
-  const diagnostic = classData?.diagnostic ?? null;
+  const diagnostic = useMemo(() => parseDiagnostic(classData?.diagnostic?.results ?? null), [classData]);
   const minutes = Math.max(10, Math.min(120, profile.dailyMinutes || 30));
-  // Lessons the check-in shows the student needs most come first.
-  const plan = useMemo(() => {
-    if (!hasLessons) return [];
-    const results = diagnostic?.results;
-    const ordered = results ? [...lessons].sort((a, b) => Number(results[a.id] ?? false) - Number(results[b.id] ?? false)) : lessons;
-    return ordered.map((lesson, i) => ({ ...lesson, day: i + 1, minutes: Math.min(minutes, 25), done: completed.includes(lesson.id), focus: results ? results[lesson.id] === false : false, review: results ? results[lesson.id] === true : false }));
-  }, [completed, minutes, diagnostic, hasLessons]);
+  const plan = useMemo(() => hasLessons ? buildLearningPlan(diagnostic, completed, minutes).map((item) => ({ ...lessons.find((lesson) => lesson.id === item.id)!, ...item })) : [], [diagnostic, completed, minutes, hasLessons]);
 
+  if (showDiagnostic) return <DiagnosticQuiz onCancel={() => setShowDiagnostic(false)} onComplete={(result) => { setShowDiagnostic(false); setPlanNotice("Plan updated: topics needing the most support come first. This starting-point check is not a mastery grade."); void saveDiagnostic(cls.id, userId, result).then(refresh); }} />;
   const current = lessons.find((x) => x.id === active);
-  if (current) return <FinanceLesson key={current.id} lesson={current} profile={profile} classId={cls.id} userId={userId} minutes={Math.min(minutes, 25)} alreadyMastered={completed.includes(current.id)} onBack={() => { setActive(null); void refresh(); }} onMastered={() => { void saveMastery(cls.id, userId, current.id).then(refresh); }} />;
+  const currentPlan = plan.find((item) => item.id === active);
+  if (current) return <FinanceLesson key={`${current.id}:${currentPlan?.readiness ?? "none"}:${currentPlan?.minutes ?? minutes}:${profile.practicePreference}`} lesson={current} profile={profile} minutes={currentPlan?.minutes ?? Math.min(minutes, 25)} readiness={currentPlan?.readiness} accountId={userId} classId={cls.id} userId={userId} alreadyMastered={completed.includes(current.id)} assistant={<StudyAssistant mode="student" classId={cls.id} lessonTitle={current.title} lessonContext={`${current.title}\nObjective: ${current.objective}\nExplanation: ${current.explanation}\nWorked example: ${current.steps.join(" ")}\nWhy it matters: ${current.application}`} />} onBack={() => { setActive(null); void refresh(); }} onMastered={() => { setPlanNotice("Lesson completed. Your plan has moved this topic to review and prioritized the remaining topics."); void saveMastery(cls.id, userId, current.id).then(refresh); }} />;
 
   const objectives = classData?.objectives ?? [];
   const lessonCount = objectives.filter((item) => item.student_lesson).length;
@@ -107,33 +115,19 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
 
     <div className="finance-info-grid"><div className="finance-info-card"><Target size={20}/><strong>Your learning goal</strong><p>{profile.goal}</p></div><div className="finance-info-card"><Clock3 size={20}/><strong>Your study schedule</strong><p>{minutes} minutes available daily · {Math.min(minutes,25)} minute core lessons</p></div><div className="finance-info-card"><Sparkles size={20}/><strong>Your personalized approach</strong><p>{profile.explanationPreference} + {profile.practicePreference.toLowerCase()}</p></div></div>
 
-    {hasLessons && !diagnostic && !takingCheck && classData && <div className="cls-diagnostic-cta"><div><strong>Take a 2-minute check-in</strong><p>Four quick questions show what you already know, so your lesson plan starts with what you need most.</p></div><button type="button" className="primary-button" onClick={() => setTakingCheck(true)}>Start check-in <ArrowRight size={15}/></button></div>}
-    {takingCheck && <DiagnosticCheck onDone={(results) => { setTakingCheck(false); void saveDiagnostic(cls.id, userId, results).then(refresh); }} onCancel={() => setTakingCheck(false)} />}
-
     {hasLessons ? <>
-      <div className="finance-section-heading"><div><span className="eyebrow">BUILT FOR YOUR PROFESSOR&apos;S OBJECTIVES</span><h2>Your personalized lesson plan</h2><p>{diagnostic ? "Ordered by your check-in: topics you missed come first, topics you already know become quick reviews." : "Ordered from foundations to applications. Lessons adapt their presentation to your learning profile."}</p></div>{diagnostic && <button type="button" className="text-button" onClick={() => setTakingCheck(true)}>Retake check-in</button>}</div>
+      <div className="finance-section-heading"><div><span className="eyebrow">BUILT FOR YOUR PROFESSOR&apos;S OBJECTIVES</span><h2>Your personalized lesson plan</h2><p>Your starting-point results prioritize topics needing support; completing a lesson updates the remaining plan.</p></div></div>
+      <div className="diagnostic-banner"><div><strong>{diagnostic ? "Your plan responds to your starting point" : "Know where to begin"}</strong><p>{diagnostic ? "Priority, session length, and foundation support use your topic check. Retake it when you want a fresh starting point." : "Take eight quick questions to find which course objectives need the most attention."}</p></div><button className="secondary-button" onClick={() => setShowDiagnostic(true)}>{diagnostic ? "Retake starting-point check" : "Check my starting point"}</button></div>
+      {planNotice && <p className="night-notice" role="status">{planNotice}</p>}
       {profile.motivation && <div className="finance-motivation"><Sparkles size={17}/><span><strong>Remember your why:</strong> {profile.motivation}</span></div>}
-      <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className="finance-lesson"><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : "UPCOMING"}</span>{!lesson.done && lesson.focus && <span className="cls-badge focus">Focus: missed in your check-in</span>}{!lesson.done && lesson.review && <span className="cls-badge review">Quick review: you got this right</span>}<h3>{lesson.title}</h3><p>{lesson.short}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={()=>{setActive(lesson.id);}}>{lesson.done?"Review lesson":"Start lesson"} <ArrowRight size={15}/></button></div>
+      <div className="finance-lessons">{plan.map((lesson, index) => <article key={lesson.id} className="finance-lesson"><div className="finance-lesson-main"><span className="finance-lesson-index">{lesson.done ? <CheckCircle2 size={20}/> : index+1}</span><div><span className="finance-lesson-meta">DAY {lesson.day} · {lesson.minutes} MIN · {lesson.done ? "MASTERED" : started.includes(lesson.id) ? "IN PROGRESS" : "UPCOMING"}</span><h3>{lesson.title}</h3><p>{lesson.short}</p><span className="learning-approach">{lesson.approach}</span><p className="learning-reason">{lesson.reason}</p><small><Target size={13}/> {lesson.objective}</small></div><button className="primary-button" onClick={() => { setActive(lesson.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{lesson.done ? "Review lesson" : started.includes(lesson.id) ? "Resume lesson" : "Start lesson"} <ArrowRight size={15}/></button></div>
 </article>)}</div>
     </> : <section className="cls-card" style={{ marginTop: 16 }}>
       <div className="cls-card-head"><div><span className="eyebrow">LEARNING OBJECTIVES</span><h2>What you&apos;ll learn in this class</h2></div></div>
       {objectives.length ? objectives.map((objective) => <div className="cls-item" key={objective.id}><span className="cls-check"><Target size={13}/></span><div><strong>{objective.title}</strong>{objective.description && <small>{objective.description}</small>}</div></div>) : <p className="cls-empty">Your professor hasn&apos;t added objectives yet.</p>}
       <p className="cls-note">Interactive lessons are available for finance classes today. Use your assignments and Study Spark&apos;s planner for this class.</p>
     </section>}
-    <p className="finance-disclaimer">Your check-in, study time, practice answers and reflections are saved to your account and shared only with your professor for this class.</p>
-  </section>;
-}
-
-function DiagnosticCheck({ onDone, onCancel }: { onDone: (results: Record<string, boolean>) => void; onCancel: () => void }) {
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const allAnswered = DIAGNOSTIC_QUESTIONS.every((_, i) => answers[i] !== undefined);
-  return <section className="cls-card cls-check-in" aria-labelledby="check-in-title">
-    <div className="cls-card-head"><div><span className="eyebrow">2-MINUTE CHECK-IN</span><h2 id="check-in-title">What do you already know?</h2><p className="cls-note">This isn't graded. Pick your best guess, or skip the ones you don't know.</p></div></div>
-    {DIAGNOSTIC_QUESTIONS.map((question, i) => <fieldset className="cls-question" key={question.objectiveId}>
-      <legend>{i + 1}. {question.question}</legend>
-      <div className="finance-practice-options">{question.options.map((option, j) => <button type="button" key={option} className={answers[i] === j ? "chosen" : ""} aria-pressed={answers[i] === j} onClick={() => setAnswers((prev) => ({ ...prev, [i]: j }))}>{option}</button>)}
-        <button type="button" className={answers[i] === -1 ? "chosen" : ""} aria-pressed={answers[i] === -1} onClick={() => setAnswers((prev) => ({ ...prev, [i]: -1 }))}>I don&apos;t know yet</button></div>
-    </fieldset>)}
-    <div className="finance-full-actions"><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="button" className="primary-button" disabled={!allAnswered} onClick={() => onDone(Object.fromEntries(DIAGNOSTIC_QUESTIONS.map((question, i) => [question.objectiveId, answers[i] === question.correct])))}>See my plan <ArrowRight size={15}/></button></div>
+    <StudyAssistant mode="student" classId={cls.id} />
+    <p className="finance-disclaimer">Your starting-point check, study time, practice answers and reflections are saved to your account and shared only with your professor for this class.</p>
   </section>;
 }

@@ -77,6 +77,7 @@ import {
   type Student,
   type StudentStatus,
 } from "./data";
+import StudyAssistant from "../StudyAssistant";
 import s from "./professor.module.css";
 
 type View = "Class overview" | "Students" | "Assignments" | "Learning objectives" | "Alerts";
@@ -435,6 +436,7 @@ function Overview({ cls, lessons, professorName, students, assignments, data, on
       <div className={s.panelHead}><div><h2>Coursework</h2><p>Recent and upcoming assignments</p></div><button type="button" className={s.textButton} onClick={() => onGo("Assignments")}>Manage <ArrowRight size={14} /></button></div>
       {upcoming.length ? upcoming.map((assignment) => <AssignmentSummary key={assignment.id} assignment={assignment} students={students} data={data} />) : <p className={s.empty}>No coursework assigned yet.</p>}
     </section>
+    <StudyAssistant mode="professor" classId={cls.id} />
   </>;
 }
 

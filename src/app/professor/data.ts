@@ -146,10 +146,16 @@ export function buildProfessorView(d: ProfessorClassData, showSamples: boolean):
       profile: profile?.learning_profile ?? null,
       attempts: attempts.map((row) => ({ lessonId: row.lesson_key, question: row.question, chosen: row.chosen, correct: row.correct, hinted: row.hinted, at: row.at })),
       reflections: reflections.map((row) => ({ lessonId: row.lesson_key, text: row.text, at: row.at })),
-      diagnostic: diagnostic ? { results: diagnostic.results, takenAt: diagnostic.taken_at } : null,
+      diagnostic: diagnostic ? { results: diagnosticResults(diagnostic.results), takenAt: diagnostic.taken_at } : null,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
   return { data, students };
+}
+
+// A topic counts as known when both starting-point questions were right (score 2 of 2).
+function diagnosticResults(raw: Record<string, unknown>): Record<string, boolean> {
+  const scores = (raw.scores && typeof raw.scores === "object" ? raw.scores : raw) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(scores).filter(([key]) => key !== "completedAt").map(([key, value]) => [key, value === true || value === 2]));
 }
 
 export const lessonObjectives = (data: ProfessorData): Objective[] => data.objectives.filter((item) => item.studentLesson);
