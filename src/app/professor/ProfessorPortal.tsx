@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  Bell,
   BookOpen,
   CalendarDays,
   Check,
@@ -10,8 +11,13 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  Copy,
+  Download,
+  FileText,
   GraduationCap,
   LayoutDashboard,
+  Lock,
+  Mail,
   Menu,
   Moon,
   Plus,
@@ -20,10 +26,11 @@ import {
   Sun,
   Target,
   Trash2,
+  Upload,
   Users,
   X,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ASSIGNMENT_TYPES,
   CLASS_CODE,
@@ -31,29 +38,35 @@ import {
   CLASS_UNIT,
   DEMO_PROFESSOR,
   OBJECTIVES,
+  QUESTION_BANK,
   SAMPLE_STUDENTS,
+  computeAlerts,
   daysUntil,
   formatDue,
   formatMinutes,
   isAssignedTo,
   isAssignmentDone,
   lastActiveLabel,
+  nudgeEmail,
   professorSessionKey,
+  progressCsv,
   readEnrolledStudents,
   readProfessorData,
   resetProfessorData,
   saveProfessorData,
   studentStatus,
   totalMinutes,
+  weeklySummary,
   type Assignment,
   type AssignmentType,
+  type ObjectiveRecord,
   type ProfessorData,
   type Student,
   type StudentStatus,
 } from "./data";
 import s from "./professor.module.css";
 
-type View = "Class overview" | "Students" | "Assignments";
+type View = "Class overview" | "Students" | "Assignments" | "Learning objectives" | "Alerts";
 
 const statusPill: Record<StudentStatus, string> = {
   Mastered: s.pillGreen,
@@ -120,12 +133,15 @@ export default function ProfessorPortal() {
 
   const classAssignments = data.assignments.filter((assignment) => assignment.classCode === CLASS_CODE).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const needsAttention = students.filter((student) => studentStatus(student, classAssignments, data.received) === "Needs attention");
+  const alerts = computeAlerts(students, classAssignments, data.received);
   const selected = students.find((student) => student.key === openStudent) ?? null;
 
   const navItems: { title: View; icon: typeof Users; count?: number }[] = [
     { title: "Class overview", icon: LayoutDashboard },
     { title: "Students", icon: Users, count: needsAttention.length || undefined },
     { title: "Assignments", icon: ClipboardList },
+    { title: "Learning objectives", icon: Target },
+    { title: "Alerts", icon: Bell, count: alerts.length || undefined },
   ];
 
   function signOut() {
@@ -181,11 +197,13 @@ export default function ProfessorPortal() {
             {view === "Class overview" && <Overview professorName={professor.name} students={students} assignments={classAssignments} data={data} onOpenStudent={setOpenStudent} onGo={setView} />}
             {view === "Students" && <StudentsView students={students} assignments={classAssignments} data={data} enrolledCount={enrolled.length} onToggleSamples={(value) => update({ ...data, showSamples: value })} onOpenStudent={setOpenStudent} />}
             {view === "Assignments" && <AssignmentsView students={students} assignments={classAssignments} data={data} onChange={update} />}
+            {view === "Learning objectives" && <ObjectivesView students={students} assignments={classAssignments} data={data} onChange={update} />}
+            {view === "Alerts" && <AlertsView professorName={professor.name} students={students} assignments={classAssignments} data={data} onOpenStudent={setOpenStudent} />}
           </div>
         </section>
       </div>
 
-      {selected && <StudentDrawer key={selected.key} student={selected} assignments={classAssignments} data={data} onChange={update} onClose={() => setOpenStudent(null)} />}
+      {selected && <StudentDrawer key={selected.key} professorName={professor.name} student={selected} assignments={classAssignments} data={data} onChange={update} onClose={() => setOpenStudent(null)} />}
     </main>
   );
 }
@@ -323,6 +341,7 @@ function StudentsView({ students, assignments, data, enrolledCount, onToggleSamp
   return <>
     <div className={s.pageHead}>
       <div><span className={s.eyebrow}>Roster</span><h1>Students</h1><p>Status, study time and objectives mastered for everyone in {CLASS_CODE}.</p></div>
+      <button type="button" className={s.secondary} onClick={() => downloadCsv(progressCsv(students, assignments, data.received))}><Download size={15} /> Export CSV</button>
     </div>
     <div className={s.toolbar}>
       <label htmlFor="student-search" className="sr-only">Search students</label>
@@ -499,7 +518,7 @@ function AssignmentForm({ students, onSave, onCancel }: { students: Student[]; o
   </form>;
 }
 
-function StudentDrawer({ student, assignments, data, onChange, onClose }: { student: Student; assignments: Assignment[]; data: ProfessorData; onChange: (next: ProfessorData) => void; onClose: () => void }) {
+function StudentDrawer({ professorName, student, assignments, data, onChange, onClose }: { professorName: string; student: Student; assignments: Assignment[]; data: ProfessorData; onChange: (next: ProfessorData) => void; onClose: () => void }) {
   const status = studentStatus(student, assignments, data.received);
   const mine = assignments.filter((assignment) => isAssignedTo(assignment, student.key));
   const doneCount = mine.filter((assignment) => isAssignmentDone(assignment, student, data.received)).length;
@@ -522,7 +541,10 @@ function StudentDrawer({ student, assignments, data, onChange, onClose }: { stud
         </div>
         <button type="button" className={s.iconButton} aria-label="Close" onClick={onClose} autoFocus><X size={18} /></button>
       </div>
-      <div style={{ marginTop: 12 }}><Pill status={status} /></div>
+      <div className={s.drawerActions}>
+        <Pill status={status} />
+        <a className={s.secondary} href={nudgeEmail(student, professorName, computeAlerts([student], assignments, data.received)[0]?.reasons ?? [])}><Mail size={15} /> Email student</a>
+      </div>
 
       <div className={s.miniStats}>
         <div><strong>{student.mastered.length}/{OBJECTIVES.length}</strong><span>Objectives mastered</span></div>
@@ -564,6 +586,15 @@ function StudentDrawer({ student, assignments, data, onChange, onClose }: { stud
         }) : <p className={s.empty}>No assignments for this student.</p>}
       </section>
 
+      {!student.sample && <section className={s.drawerSection}>
+        <h3>Other classes in Study Spark</h3>
+        {student.otherCourses.length ? student.otherCourses.map((course) => <div className={s.checkItem} key={`${course.code}-${course.name}`}>
+          <span className={s.checkIcon}><BookOpen size={14} /></span>
+          <div><strong>{course.name}</strong><small>{course.code} · {course.topics} topics from their files</small></div>
+          <span className={`${s.pill} ${s.pillGray}`}>{course.completed}/{course.topics} done</span>
+        </div>) : <p className={s.empty}>This student hasn't added other classes.</p>}
+      </section>}
+
       <section className={s.drawerSection}>
         <h3>Learning profile</h3>
         {profile ? <dl className={s.profileGrid}>
@@ -584,4 +615,183 @@ function StudentDrawer({ student, assignments, data, onChange, onClose }: { stud
       </section>
     </aside>
   </div>;
+}
+
+function downloadCsv(csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${CLASS_CODE}-progress-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+type Suggestion = { name: string; page: number; excerpt: string };
+
+function ObjectivesView({ students, assignments, data, onChange }: { students: Student[]; assignments: Assignment[]; data: ProfessorData; onChange: (next: ProfessorData) => void }) {
+  const [openBank, setOpenBank] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [formError, setFormError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [syllabus, setSyllabus] = useState<{ filename: string; suggestions: Suggestion[] } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  function addObjective(name: string, objective: string, source?: string) {
+    const clean = name.trim();
+    if (!clean) return "Add a name for the objective.";
+    if (data.objectives.some((item) => item.title.toLowerCase() === clean.toLowerCase())) return "That objective is already in this class.";
+    const record: ObjectiveRecord = { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: clean, objective: objective.trim(), studentLesson: false, source };
+    onChange({ ...data, objectives: [...data.objectives, record] });
+    return "";
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const error = addObjective(title, description, "Added by professor");
+    setFormError(error);
+    if (!error) { setTitle(""); setDescription(""); }
+  }
+
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploadError("");
+    if (!file.name.toLowerCase().endsWith(".pdf")) { setUploadError("Choose a PDF file."); return; }
+    if (file.size > 5 * 1024 * 1024) { setUploadError("This file is too large. Choose a PDF under 5 MB."); return; }
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const response = await fetch("/api/documents/extract", { method: "POST", body });
+      const payload = await response.json() as { error?: string; filename?: string; suggestedTopics?: Suggestion[] };
+      if (!response.ok) throw new Error(payload.error || "The PDF couldn't be processed. Try another file.");
+      setSyllabus({ filename: payload.filename ?? file.name, suggestions: payload.suggestedTopics ?? [] });
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "The PDF couldn't be processed. Try another file.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const existing = new Set(data.objectives.map((item) => item.title.toLowerCase()));
+
+  return <>
+    <div className={s.pageHead}>
+      <div><span className={s.eyebrow}>{CLASS_CODE} · {CLASS_UNIT}</span><h1>Learning objectives</h1><p>What students should be able to do, how many have mastered it, and the questions they answer.</p></div>
+    </div>
+
+    <section className={s.panel} style={{ marginBottom: 16 }}>
+      {data.objectives.map((objective) => {
+        const bank = objective.studentLesson ? QUESTION_BANK[objective.id] ?? [] : [];
+        const count = students.filter((student) => student.mastered.includes(objective.id)).length;
+        const pct = students.length ? Math.round(count / students.length * 100) : 0;
+        const linked = assignments.filter((assignment) => assignment.objectiveId === objective.id).length;
+        const open = openBank === objective.id;
+        return <div className={s.objective} key={objective.id}>
+          <div className={s.objectiveRow}>
+            <strong>{objective.title}</strong>
+            {objective.studentLesson
+              ? <span>{count} of {students.length} mastered · {pct}%</span>
+              : <span className={`${s.pill} ${s.pillAmber}`}>Not in the student app yet</span>}
+          </div>
+          {objective.objective && <p className={s.objectiveSub}>{objective.objective}</p>}
+          {objective.studentLesson && <Bar value={pct} tone={pct >= 70 ? "green" : pct < 40 ? "amber" : undefined} />}
+          <div className={s.assignmentMeta} style={{ marginTop: 8 }}>
+            {objective.studentLesson ? <span><Lock size={13} /> Matches the student lesson</span> : <span><FileText size={13} /> {objective.source ?? "Added by professor"}</span>}
+            <span><ClipboardList size={13} /> {linked} {linked === 1 ? "assignment" : "assignments"}</span>
+            {bank.length > 0 && <button type="button" className={s.textButton} aria-expanded={open} onClick={() => setOpenBank(open ? null : objective.id)}>{open ? "Hide questions" : `View ${bank.length} practice questions`}</button>}
+            {!objective.studentLesson && (confirmDelete === objective.id
+              ? <><button type="button" className={s.danger} onClick={() => { onChange({ ...data, objectives: data.objectives.filter((item) => item.id !== objective.id) }); setConfirmDelete(null); }}>Remove</button><button type="button" className={s.secondary} onClick={() => setConfirmDelete(null)}>Keep</button></>
+              : <button type="button" className={s.textButton} onClick={() => setConfirmDelete(objective.id)}><Trash2 size={13} /> Remove</button>)}
+          </div>
+          {open && <div className={s.detailBox} style={{ marginTop: 10 }}>
+            {bank.map((question, index) => <div className={s.question} key={index}>
+              <div className={s.objectiveRow}><strong>Q{index + 1}. {question.question}</strong>{data.showSamples && <span className={`${s.pill} ${question.sampleMissRate >= 50 ? s.pillRed : s.pillGray}`}>{question.sampleMissRate}% missed · sample</span>}</div>
+              <p className={s.objectiveSub}>Answer: <b>{question.options[question.correct]}</b> · {question.why}</p>
+            </div>)}
+            <p className={s.hint}>These are the same questions students answer in the lesson. The student app checks answers but doesn't save them, so miss rates are sample data.</p>
+          </div>}
+        </div>;
+      })}
+    </section>
+
+    <div className={s.grid2}>
+      <section className={s.panel}>
+        <div className={s.panelHead}><div><h2>Add an objective</h2><p>New objectives appear here for planning. Students get a lesson for them once one is built in the student app.</p></div></div>
+        <form className={s.form} onSubmit={submit}>
+          <label className={s.field}>Objective<input id="objective-title" value={title} onChange={(event) => { setTitle(event.target.value); setFormError(""); }} placeholder="e.g. Calculate loan amortization" maxLength={100} /></label>
+          <label className={s.field}>What students should be able to do <span className={s.hint}>Optional</span><input id="objective-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="e.g. Build a payment schedule for a fixed-rate loan" maxLength={200} /></label>
+          {formError && <p className={s.error} role="alert">{formError}</p>}
+          <div className={s.formActions}><button type="submit" className={s.primary}><Plus size={15} /> Add objective</button></div>
+        </form>
+      </section>
+
+      <section className={s.panel}>
+        <div className={s.panelHead}><div><h2>Import from a syllabus</h2><p>Upload a text-based PDF. Topics are found the same way as when students upload class files.</p></div></div>
+        <label htmlFor="syllabus-upload" className={s.dropZone}>
+          <Upload size={22} />
+          <strong>{uploading ? "Reading your PDF…" : "Choose a syllabus PDF"}</strong>
+          <span>Up to 5 MB and 100 pages</span>
+          <input id="syllabus-upload" type="file" accept="application/pdf,.pdf" onChange={upload} disabled={uploading} className="sr-only" />
+        </label>
+        {uploadError && <p className={s.error} role="alert" style={{ marginTop: 10 }}>{uploadError}</p>}
+        {syllabus && <div style={{ marginTop: 14 }}>
+          <p className={s.objectiveSub}>Suggested from <b>{syllabus.filename}</b>. Check each one before adding it.</p>
+          {syllabus.suggestions.length ? syllabus.suggestions.map((suggestion) => {
+            const added = existing.has(suggestion.name.toLowerCase());
+            return <div className={s.checkItem} key={`${suggestion.page}-${suggestion.name}`}>
+              <div><strong>{suggestion.name}</strong><small>Page {suggestion.page} · {suggestion.excerpt}</small></div>
+              <button type="button" className={s.secondary} disabled={added} onClick={() => addObjective(suggestion.name, "", `${syllabus.filename}, p. ${suggestion.page}`)}>{added ? <><Check size={14} /> Added</> : <><Plus size={14} /> Add</>}</button>
+            </div>;
+          }) : <p className={s.empty}>No topics were found in this PDF. Add objectives by hand instead.</p>}
+        </div>}
+      </section>
+    </div>
+  </>;
+}
+
+function AlertsView({ professorName, students, assignments, data, onOpenStudent }: { professorName: string; students: Student[]; assignments: Assignment[]; data: ProfessorData; onOpenStudent: (key: string) => void }) {
+  const alerts = computeAlerts(students, assignments, data.received);
+  const summary = weeklySummary(professorName, students, assignments, data.received);
+  const [copied, setCopied] = useState("");
+
+  async function copySummary() {
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopied("Copied. Paste it into an email or your notes.");
+    } catch {
+      setCopied("Couldn't copy automatically. Select the text and copy it.");
+    }
+  }
+
+  return <>
+    <div className={s.pageHead}>
+      <div><span className={s.eyebrow}>Early warning</span><h1>Alerts</h1><p>Students with overdue work, deadlines coming up, or no progress yet.</p></div>
+    </div>
+    <div className={s.grid2}>
+      <section className={s.panel}>
+        <div className={s.panelHead}><div><h2>{alerts.length ? `${alerts.length} ${alerts.length === 1 ? "student" : "students"} to check in with` : "No alerts"}</h2><p>High: overdue work or 5+ days inactive. Medium: due within 2 days or no objectives yet.</p></div></div>
+        {alerts.length ? alerts.map((alert) => <div className={s.alertRow} key={alert.student.key}>
+          <span className={s.avatar}>{initials(alert.student.name)}</span>
+          <div className={s.alertMain}>
+            <div className={s.objectiveRow}><strong>{alert.student.name}{alert.student.sample && <span className={s.sampleTag}>SAMPLE</span>}</strong><span className={`${s.pill} ${alert.severity === "High" ? s.pillRed : s.pillAmber}`}>{alert.severity}</span></div>
+            <ul className={s.reasonList}>{alert.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+            <div className={s.assignmentActions}>
+              <a className={s.secondary} href={nudgeEmail(alert.student, professorName, alert.reasons)}><Mail size={14} /> Email</a>
+              <button type="button" className={s.secondary} onClick={() => onOpenStudent(alert.student.key)}>View student</button>
+            </div>
+          </div>
+        </div>) : <p className={s.empty}>Everyone is up to date.</p>}
+      </section>
+      <section className={s.panel}>
+        <div className={s.panelHead}><div><h2>Weekly summary</h2><p>Copy this into an email to yourself, a TA, or an advisor.</p></div><button type="button" className={s.secondary} onClick={copySummary}><Copy size={14} /> Copy</button></div>
+        <label htmlFor="weekly-summary" className="sr-only">Weekly summary</label>
+        <textarea id="weekly-summary" className={s.summaryBox} readOnly value={summary} rows={18} onFocus={(event) => event.currentTarget.select()} />
+        {copied && <p className={s.hint} role="status" style={{ marginTop: 8 }}>{copied}</p>}
+      </section>
+    </div>
+  </>;
 }

@@ -251,3 +251,18 @@
   .stats { grid-template-columns: 1fr; }
   .miniStats { grid-template-columns: 1fr; }
 }
+
+/* Objectives, alerts, drawer actions */
+.question { padding: 10px 0; border-top: 1px solid var(--line); }
+.question:first-child { border-top: 0; padding-top: 0; }
+.dropZone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 16px; border: 2px dashed var(--line); border-radius: 12px; background: var(--canvas); color: var(--purple); text-align: center; cursor: pointer; }
+.dropZone:hover { border-color: var(--purple); }
+.dropZone strong { color: var(--ink); font-size: 14px; }
+.dropZone span { color: var(--muted); font-size: 12px; }
+.alertRow { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.alertRow:first-of-type { border-top: 0; padding-top: 0; }
+.alertMain { flex: 1; min-width: 0; }
+.reasonList { margin: 6px 0 10px; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.summaryBox { width: 100%; min-height: 320px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); color: var(--ink); font: 13px/1.6 "DM Sans", sans-serif; resize: vertical; }
+.drawerActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+a.secondary, a.primary { text-decoration: none; }
