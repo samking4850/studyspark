@@ -63,3 +63,15 @@ Onboarding captures study habits, goals/motivation, self-reported reading comfor
 The diagnostic scores two prepared questions per sample objective. Transparent rules prioritize weaker topics, shorten stronger-topic sessions, add foundation support or application practice, and pack sessions within the daily time budget. Completing a lesson moves it to review. Individual data still saves locally. Uploading arbitrary materials does not generate AI lessons; the new public-demo PDF widget demonstrates extraction only.
 
 See [PRODUCT_ALIGNMENT.md](./PRODUCT_ALIGNMENT.md) for the complete requirements audit, competitive research, proposed institutional pilot approach, and customer-discovery questions. Run both regression suites with Node.js 24: `node --experimental-strip-types --test tests/*.test.mjs`.
+
+## Connected teaching and practice demo
+
+Use **Try instructor publishing** on the landing page or visit `/instructor-demo`. The first FIN101 lesson has an editable title, objective, explanation, worked example, application, and core question with answer and feedback. Save a draft, preview, and publish a versioned snapshot. Later draft changes do not affect the published lesson. Keep this prepared lesson on simple/compound interest: supplemental practice remains the existing sample bank. This is manual authoring, not AI generation.
+
+Select **Open student class** for `/learning-demo`, a dedicated preview learner, or open FIN101 through the existing student account or guided walkthrough. Students receive the published snapshot in the same browser/origin. Published versions start fresh lesson attempts for the edited lesson; prior review items retain their original content.
+
+Checked wrong answers offer worked feedback and fresh prepared follow-up questions. Known original core distractors receive misconception-specific explanations; edited questions use the instructor's feedback. Misses create account-scoped review items. Incorrect follow-ups remain due; correct follow-ups resolve only that item, without changing the original quiz score. A new wrong attempt reopens it. No spaced review or validated mastery inference is claimed.
+
+Publishing, drafts, lesson progress, and individual review queues use browser localStorage. Storage events synchronize tabs on the same origin. There are no protected teacher roles or cross-device course records; this is not ready for real student information. The existing professor-portal branch is separate and is not merged here.
+
+Tests: run `node --experimental-strip-types --test tests/*.test.mjs` with Node.js 24, `npm run lint`, and `npx tsc --noEmit`.
