@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+.env*
+*.zip
+.DS_Store
+.vercel/
+*.tsbuildinfo
