@@ -88,3 +88,19 @@ Students get a lesson tutor inside every lesson and on their class page. It foll
 
 This branch includes everything on `main` as of commit `e0eb4de` (guided judge demo, Study Night, college landing page, starting-point check, expanded onboarding and lessons). The judge walkthrough keeps running locally with no account (`DemoFinanceClass`); signed-in students use the same lessons with progress saved to their account. `main` itself is not changed by this branch.
 
+
+## v1.3: Course Notebook (branch `main-v1.3`)
+
+v1.3 builds on v1.2 and adds a **Course Notebook** to every class: a NotebookLM-style study space built around the class, so it knows the professor's sources, objectives and students.
+
+- **Sources:** professors add shared class sources (PDF upload, or **Add a sample FIN101 reading**); students see those and can add their own private PDFs. Each source can be switched on or off.
+- **Ask:** searches the sources and returns the most relevant passages with the file and page cited. Clicking a citation opens the reader at that page. Passages can be saved to notes.
+- **Study guide:** organized by the class objectives, with key points cited by page.
+- **Flashcards:** built from definitions in the sources, with spaced repetition. Students' progress is saved and shows up for the professor.
+- **Quiz:** 8 multiple-choice questions from the sources; results are recorded for the professor.
+- **Mind map:** topics and key terms; click a topic to ask about it.
+- **Audio overview:** a spoken summary read by the browser (play, pause, speed) with a transcript.
+- **Notes:** saved to the student's account.
+- **Professors** open it from **Course notebook** in the portal. A student's drawer shows their notebook flashcards and quiz results.
+
+Everything above works without an AI key. With the key set (see "Turn it on" above), three extras turn on through the same `assistant` function: AI-written answers grounded in the cited passages, an AI-rewritten study guide, and a two-host podcast episode. The search, cards, quizzes and guides come from `src/lib/notebook.ts` (tests in `tests/notebook.test.mjs`); the tables are in `supabase/migrations/20261018150000_course_notebook.sql`.

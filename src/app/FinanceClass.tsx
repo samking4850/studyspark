@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, CheckCircle2, Clock3, Flame, GraduationCap, Mail, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Brain, CalendarDays, Check, CheckCircle2, Clock3, Flame, GraduationCap, Mail, Sparkles, Target } from "lucide-react";
 import type { StudentProfile } from "./StudentOnboarding";
 import FinanceLesson from "./FinanceLesson";
 import DiagnosticQuiz from "./DiagnosticQuiz";
 import StudyAssistant from "./StudyAssistant";
+import CourseNotebook from "./CourseNotebook";
 import { buildLearningPlan, parseDiagnostic } from "../lib/learning-plan";
 import { studyStreak, weeklyMinutes } from "./classroom";
 import { loadStudentClass, markMessageRead, saveDiagnostic, saveMastery, setCompletion, type ClassInfo, type StudentClassData } from "./cloud";
@@ -31,6 +32,7 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
   const [planNotice, setPlanNotice] = useState("");
   const [started, setStarted] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [notebook, setNotebook] = useState(false);
 
   const refresh = useCallback(async () => {
     try { setClassData(await loadStudentClass(cls.id, userId)); setLoadError(""); }
@@ -57,6 +59,7 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
   const minutes = Math.max(10, Math.min(120, profile.dailyMinutes || 30));
   const plan = useMemo(() => hasLessons ? buildLearningPlan(diagnostic, completed, minutes).map((item) => ({ ...lessons.find((lesson) => lesson.id === item.id)!, ...item })) : [], [diagnostic, completed, minutes, hasLessons]);
 
+  if (notebook) return <CourseNotebook cls={cls} userId={userId} role="student" objectives={(classData?.objectives ?? []).map((item) => item.title)} onBack={() => { setNotebook(false); void refresh(); }} />;
   if (showDiagnostic) return <DiagnosticQuiz onCancel={() => setShowDiagnostic(false)} onComplete={(result) => { setShowDiagnostic(false); setPlanNotice("Plan updated: topics needing the most support come first. This starting-point check is not a mastery grade."); void saveDiagnostic(cls.id, userId, result).then(refresh); }} />;
   const current = lessons.find((x) => x.id === active);
   const currentPlan = plan.find((item) => item.id === active);
@@ -78,6 +81,7 @@ export default function FinanceClass({ cls, profile, userId, onBack }: { cls: Cl
     <div className="finance-hero"><div><span className="finance-kicker"><GraduationCap size={15}/> ENROLLED · {cls.code}</span><h1>{cls.name}</h1><p>{cls.professorName ? `Professor ${cls.professorName}` : "Your professor"}{cls.unit ? ` · Current unit: ${cls.unit}` : ""}</p><span className="finance-tag"><CalendarDays size={15}/> {nextDue ? `Next due: ${nextDue.title} · ${formatDue(nextDue.due_date)}` : "Nothing due right now"} · {objectives.length} learning objectives</span></div><div className="finance-progress"><strong>{completed.length} / {lessonCount || objectives.length}</strong><span>lessons mastered</span><div className="finance-progress-track"><div style={{width:`${Math.min(100,completed.length/Math.max(1, lessonCount)*100)}%`}}/></div></div></div>
 
     {loadError && <p className="inline-error" role="alert">{loadError}</p>}
+    <div className="nb-launch"><div><strong><Brain size={18} /> Course notebook</strong><p>Ask questions about your class sources with page citations, and turn them into a study guide, flashcards, quizzes, a mind map and an audio overview.</p></div><button type="button" className="primary-button" onClick={() => { setNotebook(true); window.scrollTo({ top: 0 }); }}>Open notebook <ArrowRight size={15} /></button></div>
     {!classData && !loadError && <p className="cls-note">Loading your class…</p>}
 
     {unread.length > 0 && <div className="cls-messages">{unread.map((message) => <div className="cls-message" key={message.id}>

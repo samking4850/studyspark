@@ -180,7 +180,7 @@ export async function markMessageRead(messageId: string) {
 
 // Professor reads and writes -----------------------------------------------------------
 export async function loadClassForProfessor(classId: string) {
-  const [objectives, assignments, enrollments, mastery, sessions, attempts, reflections, diagnostics, messages, notes] = await Promise.all([
+  const [objectives, assignments, enrollments, mastery, sessions, attempts, reflections, diagnostics, messages, notes, reviews] = await Promise.all([
     supabase.from("objectives").select("*").eq("class_id", classId).order("position"),
     supabase.from("assignments").select("*").eq("class_id", classId).order("due_date"),
     supabase.from("enrollments").select("student_id, joined_at").eq("class_id", classId),
@@ -191,6 +191,7 @@ export async function loadClassForProfessor(classId: string) {
     supabase.from("diagnostics").select("student_id, results, taken_at").eq("class_id", classId),
     supabase.from("messages").select("*").eq("class_id", classId).order("sent_at", { ascending: false }),
     supabase.from("professor_notes").select("student_id, text").eq("class_id", classId),
+    supabase.from("flashcard_reviews").select("user_id, box, reviews").eq("class_id", classId),
   ]);
   const assignmentRows = (assignments.data as AssignmentRow[] | null) ?? [];
   const enrollmentRows = (enrollments.data as { student_id: string; joined_at: string }[] | null) ?? [];
@@ -211,6 +212,7 @@ export async function loadClassForProfessor(classId: string) {
     diagnostics: (diagnostics.data as DiagnosticRow[] | null) ?? [],
     messages: (messages.data as MessageRow[] | null) ?? [],
     notes: (notes.data as { student_id: string; text: string }[] | null) ?? [],
+    reviews: (reviews.data as { user_id: string; box: number; reviews: number }[] | null) ?? [],
   };
 }
 export type ProfessorClassData = Awaited<ReturnType<typeof loadClassForProfessor>>;
@@ -267,4 +269,63 @@ export async function addExampleAssignments(classId: string) {
     { class_id: classId, title: "Lesson: Annuities and loan payments", type: "Lesson", objective_key: "fin-annuity", due_date: isoDay(9), est_minutes: 25, instructions: lesson },
   ]);
   return error ? friendlyError(error.message) : "";
+}
+
+// Course notebook -------------------------------------------------------------------
+export type SourceRow = { id: string; class_id: string; owner_id: string; shared: boolean; title: string; page_count: number; pages: { num: number; text: string }[]; topics: { name: string; page: number }[]; created_at: string };
+export type NoteRow = { id: string; title: string; body: string; citation: string | null; created_at: string };
+export type ReviewRow = { user_id: string; card_id: string; box: number; due: string; reviews: number; updated_at: string };
+
+export async function listSources(classId: string) {
+  const { data, error } = await supabase.from("sources").select("*").eq("class_id", classId).order("created_at");
+  return { sources: (data as SourceRow[] | null) ?? [], error: error ? friendlyError(error.message) : "" };
+}
+
+export async function addSource(classId: string, input: { title: string; pageCount: number; pages: { num: number; text: string }[]; topics: { name: string; page: number }[]; shared: boolean }) {
+  const { error } = await supabase.from("sources").insert({ class_id: classId, title: input.title.slice(0, 200), page_count: input.pageCount, pages: input.pages, topics: input.topics, shared: input.shared });
+  return error ? friendlyError(error.message) : "";
+}
+
+export async function deleteSource(id: string) {
+  const { error } = await supabase.from("sources").delete().eq("id", id);
+  return error ? friendlyError(error.message) : "";
+}
+
+export async function listNotes(classId: string, userId: string) {
+  const { data } = await supabase.from("notebook_notes").select("id, title, body, citation, created_at").eq("class_id", classId).eq("user_id", userId).order("created_at", { ascending: false });
+  return (data as NoteRow[] | null) ?? [];
+}
+
+export async function addNote(classId: string, input: { title: string; body: string; citation?: string }) {
+  const { error } = await supabase.from("notebook_notes").insert({ class_id: classId, title: input.title.slice(0, 200), body: input.body.slice(0, 8000), citation: input.citation ?? null });
+  return error ? friendlyError(error.message) : "";
+}
+
+export async function deleteNote(id: string) {
+  await supabase.from("notebook_notes").delete().eq("id", id);
+}
+
+export async function listReviews(classId: string, userId?: string) {
+  let query = supabase.from("flashcard_reviews").select("user_id, card_id, box, due, reviews, updated_at").eq("class_id", classId);
+  if (userId) query = query.eq("user_id", userId);
+  const { data } = await query;
+  return (data as ReviewRow[] | null) ?? [];
+}
+
+export async function saveReview(classId: string, userId: string, cardId: string, box: number, due: string, reviews: number) {
+  const { error } = await supabase.from("flashcard_reviews").upsert({ class_id: classId, user_id: userId, card_id: cardId, box, due, reviews, updated_at: new Date().toISOString() });
+  return error ? friendlyError(error.message) : "";
+}
+
+// Calls the "assistant" Edge Function. notConfigured is true until the team adds an AI key.
+export async function invokeAssistant(body: Record<string, unknown>): Promise<{ reply: string; error: string; notConfigured: boolean }> {
+  const { data, error } = await supabase.functions.invoke("assistant", { body });
+  if (!error) return { reply: String((data as { reply?: string })?.reply ?? ""), error: "", notConfigured: false };
+  let message = "The assistant couldn't answer right now. Try again in a moment.";
+  let code = "";
+  const context = (error as { context?: unknown }).context;
+  if (context instanceof Response) {
+    try { const payload = await context.json(); if (typeof payload?.message === "string") message = payload.message; if (typeof payload?.error === "string") code = payload.error; } catch { /* keep the default message */ }
+  }
+  return { reply: "", error: message, notConfigured: code === "not_configured" };
 }

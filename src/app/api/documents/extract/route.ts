@@ -72,6 +72,19 @@ function suggestTopics(pages: Array<{ num: number; text: string }>): SuggestedTo
   return [...candidates.values()].slice(0, 20);
 }
 
+function limitPages(pages: Array<{ num: number; text: string }>, maxCharacters: number) {
+  const limited: Array<{ num: number; text: string }> = [];
+  let used = 0;
+  for (const page of pages) {
+    const text = page.text.replace(/[ \t]+/g, " ").trim();
+    if (!text) continue;
+    if (used + text.length > maxCharacters) break;
+    limited.push({ num: page.num, text });
+    used += text.length;
+  }
+  return limited;
+}
+
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_FILE_BYTES + 64 * 1024) {
@@ -132,6 +145,8 @@ export async function POST(request: Request) {
       extractedText: extractedText.slice(0, MAX_EXTRACTED_CHARACTERS),
       textTruncated: extractedText.length > MAX_EXTRACTED_CHARACTERS,
       suggestedTopics: suggestTopics(pages),
+      // Per-page text (same overall character cap) so the course notebook can cite file and page.
+      pages: limitPages(pages, MAX_EXTRACTED_CHARACTERS),
     });
   } catch (error) {
     console.error("PDF extraction failed:", error instanceof Error ? { name: error.name, message: error.message } : "Unknown parser error");

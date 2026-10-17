@@ -63,6 +63,7 @@ export type Student = {
   attempts: Attempt[];
   reflections: Reflection[];
   diagnostic: Diagnostic | null;
+  notebook: { cardsReviewed: number; cardsMastered: number; reviews: number } | null;
 };
 
 export type StudentStatus = "Mastered" | "On track" | "Needs attention" | "Not started";
@@ -133,6 +134,7 @@ export function buildProfessorView(d: ProfessorClassData, showSamples: boolean):
     const reflections = d.reflections.filter((row) => row.student_id === id);
     const mastery = d.mastery.filter((row) => row.student_id === id);
     const diagnostic = d.diagnostics.find((row) => row.student_id === id);
+    const cardRows = d.reviews.filter((row) => row.user_id === id);
     const lastActive = latest(...sessions.map((row) => row.started_at), ...attempts.map((row) => row.at), ...reflections.map((row) => row.at), ...mastery.map((row) => row.mastered_at), diagnostic?.taken_at);
     return {
       key: id,
@@ -147,6 +149,7 @@ export function buildProfessorView(d: ProfessorClassData, showSamples: boolean):
       attempts: attempts.map((row) => ({ lessonId: row.lesson_key, question: row.question, chosen: row.chosen, correct: row.correct, hinted: row.hinted, at: row.at })),
       reflections: reflections.map((row) => ({ lessonId: row.lesson_key, text: row.text, at: row.at })),
       diagnostic: diagnostic ? { results: diagnosticResults(diagnostic.results), takenAt: diagnostic.taken_at } : null,
+      notebook: { cardsReviewed: cardRows.length, cardsMastered: cardRows.filter((row) => row.box >= 4).length, reviews: cardRows.reduce((sum, row) => sum + row.reviews, 0) },
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
   return { data, students };
@@ -165,17 +168,17 @@ const sampleProfile = (goal: string, confidence: string, explanationPreference: 
 
 export const SAMPLE_STUDENTS: Student[] = [
   { key: "sample:maya", name: "Maya Rodriguez", email: "maya.r@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv"], weeklyMinutes: [95, 110, 120, 85],
-    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Earn a higher grade", "I understand most things quickly", "Real-world applications", "Scenario-based challenges", "Finding enough time", "I want to run my own business someday.", 30), attempts: [], reflections: [], diagnostic: null, notebook: null },
   { key: "sample:jordan", name: "Jordan Taylor", email: "jordan.t@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 1, mastered: ["fin-interest", "fin-fv"], weeklyMinutes: [60, 75, 70, 55],
-    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Understand the material deeply", "Some topics make sense, others don't", "Step-by-step examples", "Practice questions with hints", "Understanding difficult concepts", "", 30), attempts: [], reflections: [], diagnostic: null, notebook: null },
   { key: "sample:sam", name: "Sam Kim", email: "sam.k@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 6, mastered: [], weeklyMinutes: [40, 15, 0, 0],
-    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Build confidence in difficult subjects", "I usually need help with the basics", "Short and simple explanations", "Games and trivia", "Staying motivated", "Pass this class so I can stay on the team.", 15), attempts: [], reflections: [], diagnostic: null, notebook: null },
   { key: "sample:priya", name: "Priya Shah", email: "priya.s@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 0, mastered: ["fin-interest", "fin-fv", "fin-pv", "fin-annuity"], weeklyMinutes: [80, 90, 105, 120],
-    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Prepare for a career", "I'm ready for challenging material", "Detailed explanations", "Scenario-based challenges", "Remembering what I've learned", "Become a financial analyst.", 45), attempts: [], reflections: [], diagnostic: null, notebook: null },
   { key: "sample:alex", name: "Alex Nguyen", email: "alex.n@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: 3, mastered: ["fin-fv"], weeklyMinutes: [35, 45, 30, 25],
-    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), attempts: [], reflections: [], diagnostic: null },
+    profile: sampleProfile("Earn a higher grade", "Some topics make sense, others don't", "Step-by-step examples", "Flashcards and quick recall", "Knowing where to start", "", 30), attempts: [], reflections: [], diagnostic: null, notebook: null },
   { key: "sample:chris", name: "Chris Okafor", email: "chris.o@example.edu", sample: true, joinedAt: null, lastActiveDaysAgo: null, mastered: [], weeklyMinutes: [0, 0, 0, 0],
-    profile: null, attempts: [], reflections: [], diagnostic: null },
+    profile: null, attempts: [], reflections: [], diagnostic: null, notebook: null },
 ];
 
 export function daysUntil(isoDate: string) {

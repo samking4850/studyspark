@@ -78,9 +78,10 @@ import {
   type StudentStatus,
 } from "./data";
 import StudyAssistant from "../StudyAssistant";
+import CourseNotebook from "../CourseNotebook";
 import s from "./professor.module.css";
 
-type View = "Class overview" | "Students" | "Assignments" | "Learning objectives" | "Alerts";
+type View = "Class overview" | "Students" | "Assignments" | "Learning objectives" | "Course notebook" | "Alerts";
 
 const statusPill: Record<StudentStatus, string> = {
   Mastered: s.pillGreen,
@@ -261,6 +262,7 @@ export default function ProfessorPortal() {
     { title: "Students", icon: Users, count: needsAttention.length || undefined },
     { title: "Assignments", icon: ClipboardList },
     { title: "Learning objectives", icon: Target },
+    { title: "Course notebook", icon: BookOpen },
     { title: "Alerts", icon: Bell, count: alerts.length || undefined },
   ];
 
@@ -317,6 +319,7 @@ export default function ProfessorPortal() {
               {view === "Students" && <StudentsView cls={cls} lessons={lessons} students={students} assignments={classAssignments} data={data} enrolledCount={view_?.students.length ?? 0} samplesAllowed={samplesAllowed} onToggleSamples={(value) => { setShowSamples(value); try { window.localStorage.setItem(samplesKey, String(value)); } catch { /* preference only */ } }} onOpenStudent={setOpenStudent} />}
               {view === "Assignments" && <AssignmentsView cls={cls} lessons={lessons} students={students} assignments={classAssignments} data={data} actions={actions} />}
               {view === "Learning objectives" && <ObjectivesView cls={cls} students={students} assignments={classAssignments} data={data} actions={actions} />}
+              {view === "Course notebook" && <CourseNotebook cls={cls} userId={me.id} role="professor" objectives={data.objectives.map((item) => item.title)} />}
               {view === "Alerts" && <AlertsView cls={cls} lessons={lessons} professorName={me.name} students={students} assignments={classAssignments} data={data} onOpenStudent={setOpenStudent} />}
             </>}
           </div>
@@ -929,10 +932,15 @@ function AlertsView({ cls, lessons, professorName, students, assignments, data, 
   </>;
 }
 
+function plural(count: number, word: string) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
 function EvidenceOfLearning({ lessons, student }: { lessons: Objective[]; student: Student }) {
   const answered = student.attempts.length;
   const correct = student.attempts.filter((attempt) => attempt.correct).length;
   const hinted = student.attempts.filter((attempt) => attempt.hinted).length;
+  const notebookQuiz = student.attempts.filter((attempt) => attempt.lessonId === "notebook-quiz");
   return <>
     <div className={s.miniStats}>
       <div><strong>{answered ? `${Math.round(correct / answered * 100)}%` : "—"}</strong><span>Practice accuracy ({answered} answers)</span></div>
@@ -946,8 +954,9 @@ function EvidenceOfLearning({ lessons, student }: { lessons: Objective[]; studen
           const knew = student.diagnostic?.results[objective.id];
           return <span key={objective.id} className={`${s.pill} ${knew ? s.pillGreen : s.pillAmber}`}>{knew ? <Check size={13} /> : <Target size={13} />}{objective.title}</span>;
         })}</div>
-        : <p className={s.hint} style={{ marginTop: 4 }}>Hasn't taken the 2-minute check-in yet.</p>}
+        : <p className={s.hint} style={{ marginTop: 4 }}>Hasn't taken the starting-point check yet.</p>}
     </div>
+    <p className={s.hint} style={{ marginTop: 10 }}>Course notebook: {plural(student.notebook?.cardsReviewed ?? 0, "flashcard")} studied ({student.notebook?.cardsMastered ?? 0} mastered, {plural(student.notebook?.reviews ?? 0, "review")}){notebookQuiz.length ? ` · notebook quizzes ${notebookQuiz.filter((attempt) => attempt.correct).length}/${notebookQuiz.length} correct` : ""}.</p>
     {lessons.map((objective) => {
       const tries = student.attempts.filter((attempt) => attempt.lessonId === objective.id);
       const reflection = student.reflections.find((item) => item.lessonId === objective.id);
