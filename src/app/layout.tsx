@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "StudySpark — A clear next step for every student",
   description:
-    "College-funded learning support: instructor-aligned practice, purposeful study plans, and collaborative review.",
+    "A personal study companion for students, built for private colleges and independent high schools. Explore personalized lessons, course practice, and study nights.",
 };
 
 export default function RootLayout({
