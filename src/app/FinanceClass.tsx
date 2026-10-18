@@ -18,8 +18,9 @@ import { sampleLessons } from "../lib/course-content";
 const formatDate = (date: Date) => date.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
 function addDays(date: Date, days: number) { const copy = new Date(date); copy.setDate(copy.getDate() + days); return copy; }
 
-export default function FinanceClass({ profile, accountId, onBack, startWithDiagnostic=false, onLessonStart }: { profile: StudentProfile; accountId: string; onBack: () => void; startWithDiagnostic?:boolean;onLessonStart?:()=>void }) {
-  const publication = usePublication();
+export default function FinanceClass({ profile, accountId, onBack, startWithDiagnostic=false, onLessonStart, preparedDemo=false }: { profile: StudentProfile; accountId: string; onBack: () => void; startWithDiagnostic?:boolean;onLessonStart?:()=>void;preparedDemo?:boolean }) {
+  const savedPublication = usePublication();
+  const publication = preparedDemo ? null : savedPublication;
   const lessons = useMemo(() => sampleLessons.map(lesson => publication?.lesson.id === lesson.id ? publication.lesson : lesson), [publication]);
   const progressId = (id: string) => publication?.lesson.id === id ? `${id}@v${publication.version}` : id;
   const storageKey = `study-spark-finance-completed:${accountId}`;
